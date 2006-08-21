@@ -85,7 +85,8 @@ All that said, here follows the instructions.
      CONFIG_IPV6_MIP6=y
      CONFIG_XFRM=y
      CONFIG_XFRM_USER=y
-     CONFIG_XFRM_ENHANCEMENT=y
+     CONFIG_XFRM_SUB_POLICY=y
+     CONFIG_INET6_XFRM_MODE_ROUTEOPTIMIZATION=y
 
    The Home Agent and Mobile Node also need:
 
