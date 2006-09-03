@@ -181,7 +181,8 @@ static void xfrm_state_dump(const char *msg, int nlmsg_flags, int nlmsg_type,
 }
 
 static void xfrm_state_id_dump(const char *msg,
-			       const struct xfrm_usersa_id *sa_id)
+			       const struct xfrm_usersa_id *sa_id,
+			       const xfrm_address_t *saddr)
 {
 	cdbg(msg);
 	cdbg("daddr %x:%x:%x:%x:%x:%x:%x:%x\n"
@@ -191,7 +192,7 @@ static void xfrm_state_id_dump(const char *msg,
 	     NIP6ADDR((struct in6_addr *)&sa_id->daddr),
 	     sa_id->spi,
 	     sa_id->proto,
-	     NIP6ADDR((struct in6_addr *)&sa_id->saddr));
+	     NIP6ADDR((struct in6_addr *)saddr));
 }
 
 /* Set xfrm_selector fields for MIPv6 and IPsec policies and MIPv6
@@ -254,12 +255,14 @@ long xfrm_last_used(const struct in6_addr *daddr,
 		    const struct in6_addr *saddr, int proto,
 		    const struct timespec *now)
 {
-	uint8_t sbuf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_id))];
+	uint8_t sbuf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_id)) +
+		     RTA_LENGTH(sizeof(xfrm_address_t))];
 	uint8_t rbuf[384];
 	struct nlmsghdr *sn, *rn;
 	struct xfrm_usersa_id *sa_id;
 	struct xfrm_usersa_info *sa;
 	int err;
+	uint64_t lastused;
 	long time_used;
 
 	memset(sbuf, 0, sizeof(sbuf));
@@ -270,9 +273,11 @@ long xfrm_last_used(const struct in6_addr *daddr,
 
 	sa_id = NLMSG_DATA(sn);
 	memcpy(&sa_id->daddr.a6, daddr, sizeof(sa_id->daddr.a6));
-	memcpy(&sa_id->saddr.a6, saddr, sizeof(sa_id->saddr.a6));
 	sa_id->family = AF_INET6;
 	sa_id->proto = proto;
+
+	addattr_l(sn, sizeof(sbuf), XFRMA_SRCADDR, saddr,
+		  sizeof(xfrm_address_t));
 	
 	memset(rbuf, 0, sizeof(rbuf));
 	rn = (struct nlmsghdr *)rbuf;
@@ -281,11 +286,24 @@ long xfrm_last_used(const struct in6_addr *daddr,
 	if (err < 0)
 		return -1;
 	sa = NLMSG_DATA(rn);
-	if (!sa->curlft.use_time) {
+
+	{
+#define XFRMS_RTA(x)	((struct rtattr*)(((char*)(x)) + NLMSG_ALIGN(sizeof(struct xfrm_usersa_info))))
+		struct rtattr *rta_tb[XFRMA_MAX+1];
+		memset(rta_tb, 0, sizeof(rta_tb));
+		parse_rtattr(rta_tb, XFRMA_MAX, XFRMS_RTA(sa), 
+			     rn->nlmsg_len - NLMSG_LENGTH(sizeof(*sa)));
+
+		if (!rta_tb[XFRMA_LASTUSED])
+			return -1;
+
+		lastused = *(uint64_t *)RTA_DATA(rta_tb[XFRMA_LASTUSED]);
+	}
+	if (!lastused) {
 		XDBG("binding was unused\n");
 		return -1;
 	}
-	time_used = now->tv_sec - (long)sa->curlft.use_time;
+	time_used = now->tv_sec - (long)lastused;
 	XDBG("last use of binding was %ld seconds ago\n", time_used);
 	return time_used; 
 }
@@ -404,7 +422,7 @@ static int xfrm_state_add(const struct xfrm_selector *sel,
 	sa->mode = XFRM_MODE_ROUTEOPTIMIZATION;
 	sa->flags = flags;
 
-	addattr_l(n, sizeof(buf), XFRMA_ADDR, coa, sizeof(struct in6_addr));
+	addattr_l(n, sizeof(buf), XFRMA_COADDR, coa, sizeof(struct in6_addr));
 
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0)
 		xfrm_state_dump("Failed to add state:\n",
@@ -414,14 +432,15 @@ static int xfrm_state_add(const struct xfrm_selector *sel,
 
 static int xfrm_state_del(int proto, const struct xfrm_selector *sel)
 {
-	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_info))];
+	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_id)) +
+		    RTA_LENGTH(sizeof(xfrm_address_t))];
 	struct nlmsghdr *n;
 	struct xfrm_usersa_id *sa_id;
 	int err;
 
 	memset(buf, 0, sizeof(buf));
 	n = (struct nlmsghdr *)buf;
-	n->nlmsg_len = NLMSG_LENGTH(sizeof(struct xfrm_usersa_info));
+	n->nlmsg_len = NLMSG_LENGTH(sizeof(struct xfrm_usersa_id));
 	n->nlmsg_flags = NLM_F_REQUEST;
 	n->nlmsg_type = XFRM_MSG_DELSA;
 
@@ -430,10 +449,12 @@ static int xfrm_state_del(int proto, const struct xfrm_selector *sel)
 	memcpy(sa_id->daddr.a6, sel->daddr.a6, sizeof(sel->daddr.a6));
 	sa_id->family = AF_INET6;
 	sa_id->proto = proto;
-	memcpy(sa_id->saddr.a6, sel->saddr.a6, sizeof(sel->saddr.a6));
+
+	addattr_l(n, sizeof(buf), XFRMA_SRCADDR, &sel->saddr,
+		  sizeof(sel->saddr));
 
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0)
-		xfrm_state_id_dump("Failed to del state:\n", sa_id);
+		xfrm_state_id_dump("Failed to del state:\n", sa_id, &sel->saddr);
 	return err;
 }
 
@@ -466,7 +487,7 @@ static inline void create_trig_dstopt_tmpl(struct xfrm_user_tmpl *tmpl,
 					   const struct in6_addr *src)
 {
 	_create_dstopt_tmpl(tmpl, dst, src,
-			    XFRM_MODE_ROUTEOPTIMIZATION_TRIGGER);
+			    XFRM_MODE_IN_TRIGGER);
 }
 
 static void _create_rh_tmpl(struct xfrm_user_tmpl *tmpl, int mode)
@@ -485,7 +506,7 @@ static void create_rh_tmpl(struct xfrm_user_tmpl *tmpl)
 
 static void create_trig_rh_tmpl(struct xfrm_user_tmpl *tmpl)
 {
-	_create_rh_tmpl(tmpl, XFRM_MODE_ROUTEOPTIMIZATION_TRIGGER);
+	_create_rh_tmpl(tmpl, XFRM_MODE_IN_TRIGGER);
 }
 
 /* Creates a ESP/AH/IPComp policy for protecting signaling bewteen MN
@@ -1760,7 +1781,7 @@ static int parse_report(struct nlmsghdr *msg)
 	}
 	rpt = NLMSG_DATA(msg);
 
-	if (rpt->dir != XFRM_POLICY_IN || rpt->proto != IPPROTO_DSTOPTS ||
+	if (rpt->proto != IPPROTO_DSTOPTS ||
 	    rpt->sel.family != AF_INET6)
 		return 0;
 
@@ -1768,10 +1789,10 @@ static int parse_report(struct nlmsghdr *msg)
 	parse_rtattr(rta_tb, XFRMA_MAX, XFRMRPT_RTA(rpt), 
 		     msg->nlmsg_len - NLMSG_LENGTH(sizeof(*rpt)));
 
-	if (!rta_tb[XFRMA_ADDR])
+	if (!rta_tb[XFRMA_COADDR])
 		return -1;
 
-	coaddr = (xfrm_address_t *) RTA_DATA(rta_tb[XFRMA_ADDR]);
+	coaddr = (xfrm_address_t *) RTA_DATA(rta_tb[XFRMA_COADDR]);
 
 	if (rpt->sel.proto == IPPROTO_MH && 
 	    ntohs(rpt->sel.sport) > IP6_MH_TYPE_MAX)
