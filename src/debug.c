@@ -28,18 +28,51 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/uio.h>
+#include <errno.h>
+#include <string.h>
+#include <time.h>
 
 #include "debug.h"
 
 FILE *sdbg;
 
+static const char *dbg_strdate(char *str)
+{
+	struct timespec ts;
+	time_t t;
+	int ret;
+
+	memset(&ts, 0, sizeof(ts));
+
+	ret = clock_gettime(CLOCK_REALTIME, &ts);
+	if (ret != 0)
+		sprintf(str, "(clock_gettime error=%d)", errno);
+	else {
+		t = (time_t)ts.tv_sec; /* XXX: fix it! */
+		if (t == 0) {
+			strcpy(str, "(undefined)");
+		} else {
+			char buf[1024];
+			sprintf(str, "%.19s",
+				(ctime_r(&t, buf) ? buf : "(ctime_r error)"));
+		}
+	}
+
+	return str;
+}
+
 void dbgprint(const char *fname, const char *fmt, ...)
 {
         char s[1024];
+        char stime[1024];
         va_list args;
  
         va_start(args, fmt);
         vsprintf(s, fmt, args);
+
+	memset(stime, '\0', sizeof(stime));
+	fprintf(stderr, "%s ", dbg_strdate(stime));
+
 	if (fname)
 		fprintf(stderr, "%s: ", fname);
 	fprintf(stderr, "%s", s);
