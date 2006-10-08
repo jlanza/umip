@@ -7,6 +7,7 @@ extern struct in6_addr ha_myaddr;
 extern struct in6_addr ha_mnaddr;
 
 #include "tqueue.h"
+#include "mh.h"
 
 struct ha_interface {
 	int ifindex;
@@ -40,6 +41,13 @@ struct ha_interface *ha_get_if(int ifindex);
 struct ha_interface *ha_get_if_by_addr(const struct in6_addr *addr);
 struct ha_interface *ha_get_if_by_anycast(const struct in6_addr *anycast,
 					  struct in6_addr **addr);
+int ha_recv_bu_main(const struct ip6_mh *mh, ssize_t len,
+		    const struct in6_addr_bundle *in, int iif, uint32_t flags);
+#define HA_BU_F_THREAD_JOIN	0x01
+#define HA_BU_F_PASSIVE_SEQ	0x02
+#define HA_BU_F_SKIP_DAD	0x04
+#define HA_BU_F_SKIP_BA		0x08
+
 int ha_init(void);
 void ha_cleanup(void);
 

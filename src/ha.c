@@ -645,6 +645,8 @@ struct ha_recv_bu_args {
 	struct mh_options mh_opts;
 	struct timespec lft;
 	int iif;
+	int flags;	/* HA_BU_F_XXX */
+	int *statusp;	/* 0 or more than 0 is BA status, otherwise error */
 };
 
 static void *ha_recv_bu_worker(void *varg)
@@ -697,16 +699,22 @@ restart:
 				/* with BCE_DAD we should have at least one
 				   active worker */
 				assert(bu_worker_count > 0);
+				*(arg->statusp) = -EBUSY;
 				pthread_mutex_unlock(&bu_worker_mutex);
 				pthread_exit(NULL);
 			}
 			if (!MIP6_SEQ_GT(seqno, bce->seqno)) {
-				/* sequence number expired */
-				status = IP6_MH_BAS_SEQNO_BAD;
-				seqno = bce->seqno;
-				bcache_release_entry(bce);
-				bce = NULL;
-				goto send_nack;
+				if (arg->flags & HA_BU_F_PASSIVE_SEQ) {
+					/* always use valid sequence */
+					seqno = bce->seqno + 1;
+				} else {
+					/* sequence number expired */
+					status = IP6_MH_BAS_SEQNO_BAD;
+					seqno = bce->seqno;
+					bcache_release_entry(bce);
+					bce = NULL;
+					goto send_nack;
+				}
 			}
 		} else {
 			bcache_release_entry(bce);
@@ -761,13 +769,15 @@ restart:
 			status = IP6_MH_BAS_INSUFFICIENT;
 			goto send_nack;
 		}
-		/* Do DAD for home address */
-		if (ndisc_do_dad(home_ifindex, out.dst, 
-				 bu_flags & IP6_MH_BU_LLOCAL) < 0) {
-			bcache_delete(out.src, out.dst);
-			bce = NULL;
-			status =  IP6_MH_BAS_DAD_FAILED;
-			goto send_nack;
+		if (!(arg->flags & HA_BU_F_SKIP_DAD)) {
+			/* Do DAD for home address */
+			if (ndisc_do_dad(home_ifindex, out.dst,
+					 bu_flags & IP6_MH_BU_LLOCAL) < 0) {
+				bcache_delete(out.src, out.dst);
+				bce = NULL;
+				status =  IP6_MH_BAS_DAD_FAILED;
+				goto send_nack;
+			}
 		}
 		bce = bcache_get(out.src, out.dst);
 		if (!bce) {
@@ -845,7 +855,8 @@ restart:
 		 * have a binding before sending this Binding Update,
 		 * discard the connections to the home address. */
 	}
-	mh_send_ba(&out, status, ba_flags, seqno, &lft, NULL, iif);
+	if (!(arg->flags & HA_BU_F_SKIP_BA))
+		mh_send_ba(&out, status, ba_flags, seqno, &lft, NULL, iif);
 	if (new && tsisset(lft))
 		mpd_start_mpa(&bce->our_addr, &bce->peer_addr);
 out:
@@ -860,6 +871,7 @@ out:
 	}
 	if (--bu_worker_count == 0)
 		pthread_cond_signal(&cond);
+	*(arg->statusp) = status;
 	pthread_mutex_unlock(&bu_worker_mutex);
 	pthread_exit(NULL);
 send_nack:
@@ -867,36 +879,40 @@ send_nack:
 		bcache_release_entry(bce);
 		bcache_delete(out.src, out.dst);
 	}
-	mh_send_ba_err(&out, status, 0, seqno, NULL, iif);
+	if (!(arg->flags & HA_BU_F_SKIP_BA))
+		mh_send_ba_err(&out, status, 0, seqno, NULL, iif);
 	goto out;
 }
 
-static void ha_recv_bu(const struct ip6_mh *mh, ssize_t len,
-		       const struct in6_addr_bundle *in, int iif)
+int ha_recv_bu_main(const struct ip6_mh *mh, ssize_t len,
+		    const struct in6_addr_bundle *in, int iif, uint32_t flags)
 {
 	struct ip6_mh_binding_update *bu;
 	struct mh_options mh_opts;
 	struct in6_addr_bundle out;
 	struct ha_recv_bu_args *arg;
 	struct timespec lft;
+	int status = 0;
 	pthread_t worker;
 
 	bu = (struct ip6_mh_binding_update *)mh;
 
 	if (!(bu->ip6mhbu_flags & IP6_MH_BU_HOME)) {
 		cn_recv_bu(mh, len, in, iif);
-		return;
+		return 0;
 	}
 	if (mh_bu_parse(bu, len, in, &out, &mh_opts, &lft, NULL) < 0)
-		return;
+		return -EINVAL;
 
 	arg = malloc(sizeof(struct ha_recv_bu_args) + len);
 	if (!arg) {
 		if (bce_exists(out.src, out.dst))
 			bcache_delete(out.src, out.dst);
-		mh_send_ba_err(&out, IP6_MH_BAS_INSUFFICIENT, 0,
-			       ntohs(bu->ip6mhbu_seqno), NULL, iif);
-		return;
+
+		if (!(arg->flags & HA_BU_F_SKIP_BA))
+			mh_send_ba_err(&out, IP6_MH_BAS_INSUFFICIENT, 0,
+				       ntohs(bu->ip6mhbu_seqno), NULL, iif);
+		return -ENOMEM;
 	}
 	arg->src = *out.src;
 	arg->dst = *out.dst;
@@ -914,6 +930,8 @@ static void ha_recv_bu(const struct ip6_mh *mh, ssize_t len,
 	arg->lft = lft;
 	arg->iif = iif;
 	memcpy(arg->bu, bu, len);
+	arg->flags = flags;
+	arg->statusp = &status;
 
 	pthread_mutex_lock(&bu_worker_mutex);
 	bu_worker_count++;
@@ -921,9 +939,24 @@ static void ha_recv_bu(const struct ip6_mh *mh, ssize_t len,
 		free(arg);
 		if (--bu_worker_count == 0)
 			pthread_cond_signal(&cond);
-	} else
-		pthread_detach(worker);
+	} else {
+		if (!(arg->flags & HA_BU_F_THREAD_JOIN))
+			pthread_detach(worker);
+	}
 	pthread_mutex_unlock(&bu_worker_mutex);
+
+	if (arg->flags & HA_BU_F_THREAD_JOIN) {
+		pthread_join(worker, NULL);
+		return status;
+	}
+
+	return 0;
+}
+
+static void ha_recv_bu(const struct ip6_mh *mh, ssize_t len,
+		       const struct in6_addr_bundle *in, int iif)
+{
+	(void)ha_recv_bu_main(mh, len, in, iif, 0);
 }
 
 static struct mh_handler ha_bu_handler = {
