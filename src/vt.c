@@ -55,6 +55,7 @@
 #include "debug.h"
 #include "conf.h"
 #include "vt.h"
+#include "mh.h"
 #include "bul.h"
 #include "retrout.h"
 #include "bcache.h"
@@ -680,6 +681,260 @@ static int bcache_vt_dump(void *data, void *arg)
 	return 0;
 }
 
+static int vt_str_to_uint32(const struct vt_handle *vh, const char *str,
+			    uint32_t *val)
+{
+	uint32_t v;
+	char *ptr = NULL;
+
+	v = strtoul(str, &ptr, 0);
+	if (!ptr || ptr == str || ptr[0] != '\0') {
+		fprintf(vh->vh_stream, "invalid integer:%s\n", str);
+		return -EINVAL;
+	}
+	if (v == ULONG_MAX) {
+		fprintf(vh->vh_stream, "overflow:%s\n", str);
+		return -ERANGE;
+	}
+
+	*val = v;
+	return 0;
+}
+
+/* get the first address with given string */
+static int vt_str_to_addr6(const struct vt_handle *vh, const char *str,
+			   struct in6_addr *addr)
+{
+	struct addrinfo hints;
+	struct addrinfo *res = NULL;
+	struct sockaddr_in6 *sin6;
+	int err;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_socktype = SOCK_RAW;
+	hints.ai_family = AF_INET6;
+	hints.ai_flags = AI_PASSIVE;
+
+	err = getaddrinfo(str, NULL, &hints, &res);
+	if (err != 0) {
+		fprintf(vh->vh_stream,
+			"getaddrinfo: \"%s\" :%s\n", str, gai_strerror(err));
+		goto end;
+	}
+	if (res->ai_addrlen < sizeof(*sin6)) {
+		fprintf(vh->vh_stream,
+			"getaddrinfo: \"%s\" : sockaddr too short:%d\n",
+			str, res->ai_addrlen);
+		err = -ENOBUFS;
+		goto end;
+	}
+	if (res->ai_family != AF_INET6) {
+		fprintf(vh->vh_stream,
+			"getaddrinfo: \"%s\" : family is not AF_INET6:%u\n",
+			str, res->ai_family);
+		err = -EINVAL;
+		goto end;
+	}
+	sin6 = (struct sockaddr_in6 *)res->ai_addr;
+	memcpy(addr, &sin6->sin6_addr, sizeof(*addr));
+
+ end:
+	if (res)
+		freeaddrinfo(res);
+
+	return err;
+}
+
+static const char *vt_str_space_skip(const char *str);
+static char *vt_str_space_chop(const char *str, char *buf, int bufsize);
+
+static int bcache_vt_cmd_bc_mod(const struct vt_handle *vh, const char *str,
+				int add)
+{
+	struct in6_addr hoa;
+	struct in6_addr coa;
+	struct in6_addr local;
+	uint16_t bce_flags;
+	struct timespec lft;
+	uint16_t sequence;
+	int flags = (HA_BU_F_THREAD_JOIN | HA_BU_F_PASSIVE_SEQ |
+		     HA_BU_F_SKIP_BA);
+	const char *p = str;
+	const char *hoap = NULL;
+	const char *coap = NULL;
+	const char *localp = NULL;
+	int err;
+
+	memset(&hoa, 0, sizeof(hoa));
+	memset(&coa, 0, sizeof(coa));
+	memset(&local, 0, sizeof(local));
+	bce_flags = 0;
+	tsclear(lft);
+	sequence = 0;
+
+	while (1) {
+		char name[LINE_MAX];
+		char val[LINE_MAX];
+
+		memset(name, '\0', sizeof(name));
+		memset(val, '\0', sizeof(val));
+
+		p = vt_str_space_skip(p);
+		if (strlen(p) == 0)
+			break;
+		if (!vt_str_space_chop(p, name, sizeof(name)))
+			goto usage;
+		p += strlen(name);
+		p = vt_str_space_skip(p);
+		if (!vt_str_space_chop(p, val, sizeof(val)))
+			goto usage;
+
+		if (strcmp("hoa", name) == 0) {
+			hoap = p;
+			if (vt_str_to_addr6(vh, val, &hoa))
+				goto end;
+		} else if (strcmp("coa", name) == 0) {
+			coap = p;
+			if (vt_str_to_addr6(vh, val, &coa))
+				goto end;
+		} else if (strcmp("local", name) == 0) {
+			localp = p;
+			if (vt_str_to_addr6(vh, val, &local))
+				goto end;
+		} else if (strcmp("flags", name) == 0) {
+			int len = strlen(val);
+			int i;
+
+			for (i = 0; i < len; i++) {
+				switch (val[i]) {
+				case 'A':
+					bce_flags |= IP6_MH_BU_ACK;
+					break;
+				case 'H':
+					bce_flags |= IP6_MH_BU_HOME;
+					break;
+				case 'L':
+					bce_flags |= IP6_MH_BU_LLOCAL;
+					break;
+				case 'K':
+					bce_flags |= IP6_MH_BU_KEYM;
+					break;
+				case '-':
+					break;
+				default:
+					fprintf(vh->vh_stream,
+						"invalid flag:%c\n", val[i]);
+					goto end;
+				}
+			}
+		} else if (strcmp("lifetime", name) == 0) {
+			uint32_t v;
+			if (vt_str_to_uint32(vh, val, &v))
+				goto end;
+			tssetsec(lft, v);
+		} else if (strcmp("seq", name) == 0) {
+			if (strcmp("auto", val) != 0) {
+				uint32_t v;
+				if (vt_str_to_uint32(vh, val, &v))
+					goto end;
+				if (v >= USHRT_MAX) {
+					fprintf(vh->vh_stream,
+						"sequence overflow\n");
+					goto end;
+				}
+				sequence = (uint16_t)v;
+				flags &= ~HA_BU_F_PASSIVE_SEQ;
+			}
+		} else if (strcmp("dad", name) == 0) {
+			if (strcmp("want", val) == 0){
+				flags &= ~HA_BU_F_SKIP_DAD;
+			} else if (strcmp("never", val) == 0){
+				flags |= HA_BU_F_SKIP_DAD;
+			} else {
+				fprintf(vh->vh_stream,
+					"either \"want\" or \"never\" is allowed for dad\n");
+				goto end;
+			}
+		} else {
+			fprintf(vh->vh_stream, "invalid command:%s\n", name);
+			goto usage;
+		}
+
+		p += strlen(val);
+	}
+
+	if (!hoap) {
+		fprintf(vh->vh_stream, "missing hoa\n");
+		goto end;
+	}
+	if (!coap) {
+		if (add) {
+			fprintf(vh->vh_stream, "missing coa; required for adding\n");
+			goto end;
+		}
+	}
+	if (!localp) {
+		fprintf(vh->vh_stream, "missing local\n");
+		goto end;
+	}
+
+	if (tsisset(lft)) {
+		if (!add) {
+			fprintf(vh->vh_stream, "lifetime is not zero\n");
+			goto end;
+		}
+	} else {
+		if (add) {
+			fprintf(vh->vh_stream, "lifetime is zero\n");
+			goto end;
+		}
+	}
+
+	{
+		struct ip6_mh_binding_update bu;
+		struct in6_addr_bundle ab;
+
+		memset(&bu, 0, sizeof(bu));
+		bu.ip6mhbu_flags = bce_flags;
+		bu.ip6mhbu_lifetime = htons(lft.tv_sec >> 2);
+		bu.ip6mhbu_seqno = htons(sequence);
+		ab.src = &hoa;
+		ab.dst = &local;
+		ab.local_coa = NULL;
+		if (coap)
+			ab.remote_coa = &coa;
+		else
+			ab.remote_coa = NULL;
+		ab.bind_coa = NULL;
+
+		err = ha_recv_bu_main((struct ip6_mh *)&bu, sizeof(bu), &ab, 0,
+				      flags);
+	}
+	if (err < 0)
+		fprintf(vh->vh_stream, "bc error=%d(%s)\n",
+			-err, strerror(-err));
+	else
+		fprintf(vh->vh_stream, "bc status=%d\n", err);
+ end:
+	return 0;
+
+ usage:
+	fprintf(vh->vh_stream,
+		"hoa ADDR [coa ADDR] local ADDR flags [A]H[LK] [lifetime SECOND]\n"
+		"  [seq auto|NUMBER] [dad want|never]\n");
+	return 0;
+}
+
+static int bcache_vt_cmd_bc_add(const struct vt_handle *vh, const char *str)
+{
+	return bcache_vt_cmd_bc_mod(vh, str, 1);
+}
+
+static int bcache_vt_cmd_bc_del(const struct vt_handle *vh, const char *str)
+{
+	return bcache_vt_cmd_bc_mod(vh, str, 0);
+}
+
 static int bcache_vt_cmd_bc(const struct vt_handle *vh, const char *str)
 {
 	struct bcache_vt_arg bva;
@@ -713,6 +968,16 @@ static int bcache_vt_cmd_nonce(const struct vt_handle *vh, const char *str)
 static struct vt_cmd_entry vt_cmd_bc = {
 	.cmd = "bc",
 	.parser = bcache_vt_cmd_bc,
+};
+
+static struct vt_cmd_entry vt_cmd_bc_add = {
+	.cmd = "add",
+	.parser = bcache_vt_cmd_bc_add,
+};
+
+static struct vt_cmd_entry vt_cmd_bc_del = {
+	.cmd = "del",
+	.parser = bcache_vt_cmd_bc_del,
 };
 
 static struct vt_cmd_entry vt_cmd_nonce = {
@@ -791,6 +1056,26 @@ static const char *vt_str_space_skip(const char *str)
 	}
 
 	return &str[i];
+}
+
+static char *vt_str_space_chop(const char *str, char *buf, int bufsize)
+{
+	int len = strlen(str);
+	int i = 0;
+
+	if (len > bufsize - 1)
+		len = bufsize - 1;
+
+	for (i = 0; i < len; i++) {
+		if (isspace(str[i]) == 0)
+			continue;
+
+		strncpy(buf, str, i);
+		buf[i] = '\0';
+		return buf;
+	}
+
+	return NULL;
 }
 
 static int vt_str_match(const char *def, const char *str)
@@ -1329,6 +1614,14 @@ int vt_bc_init(void)
 	ret = vt_cmd_add_root(&vt_cmd_bc);
 	if (ret < 0)
 		return ret;
+	if (is_ha()) {
+		ret = vt_cmd_add(&vt_cmd_bc, &vt_cmd_bc_add);
+		if (ret < 0)
+			return ret;
+		ret = vt_cmd_add(&vt_cmd_bc, &vt_cmd_bc_del);
+		if (ret < 0)
+			return ret;
+	}
 
 	ret = vt_cmd_add_root(&vt_cmd_nonce);
 	if (ret < 0)
