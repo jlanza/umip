@@ -900,6 +900,8 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 	memset(new, 0, sizeof(struct md_router));
 	clock_gettime(CLOCK_REALTIME, &new->timestamp);
 	INIT_LIST_HEAD(&new->prefixes);
+	INIT_LIST_HEAD(&new->list);
+	INIT_LIST_HEAD(&new->tqe.list);
 
 	while (optlen > 1) {
 		int olen = opt[1] << 3;
@@ -962,8 +964,6 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 	if (new->prefix_cnt == 0)
 		goto free_rtr;
 	
-	INIT_LIST_HEAD(&new->list);
-	INIT_LIST_HEAD(&new->tqe.list);
 	new->iface = iface;
 	new->hoplimit = ra->nd_ra_curhoplimit;
 	new->ra_flags = ra->nd_ra_flags_reserved;
