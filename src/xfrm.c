@@ -1658,6 +1658,11 @@ int xfrm_pre_bu_add_bule(struct bulentry *bule)
 	if (_mn_bule_ro_pol_add(bule, bule->home->if_tunnel, rdata))
 		return -1;
 	set_selector(&bule->peer_addr, &bule->hoa, 0, 0, 0, 0, &sel);
+	/* XXX: acquired state is already inserted */
+	if (!(bule->flags & IP6_MH_BU_HOME)) {
+		XDBG2("%s: original rdata = %d\n", __FUNCTION__, rdata);
+		rdata = 1;
+	}
 	return xfrm_state_add(&sel, IPPROTO_DSTOPTS, &bule->coa, rdata, 0);
 }
 
