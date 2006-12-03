@@ -237,10 +237,17 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 	struct sockaddr_in6 dst;
 	char cbuf[CMSG_SPACE(sizeof(*pinfo))];
 	struct iovec iov;
-	int fd, datalen, ret;
+	int fd, datalen, ret, val = 1;
 
 	fd = socket(AF_INET6, SOCK_RAW, IPPROTO_RAW);
 	if (fd < 0) return -1;
+
+	if (setsockopt(fd, IPPROTO_IPV6, IP_HDRINCL,
+		       &val, sizeof(val)) < 0) {
+		dbg("cannot set IP_HDRINCL: %s\n", strerror(errno));
+		close(fd);
+		return -errno;
+	}
 
 	memset(&frame, 0, sizeof(frame));
 	memset(&dst, 0, sizeof(dst));
@@ -403,7 +410,7 @@ int ndisc_do_dad(int ifi, struct in6_addr *addr, int do_ll)
 	struct icmp6_filter filter;
 	struct in6_addr solicit, ll;
 	unsigned char msg[MAX_PKT_LEN];
-	int hoplimit, sock, ret, val = 1;
+	int hoplimit, sock = -1, ret, val = 1, err = -1;
 	fd_set rset;
 	struct timeval tv;
 
@@ -411,18 +418,47 @@ int ndisc_do_dad(int ifi, struct in6_addr *addr, int do_ll)
 	ICMP6_FILTER_SETPASS(ND_NEIGHBOR_ADVERT, &filter);
 
 	sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-	setsockopt(sock, IPPROTO_IPV6, IPV6_RECVPKTINFO, &val, sizeof(val));
-	setsockopt(sock, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &val, sizeof(val));
-	setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &filter,
-		   sizeof(struct icmp6_filter));
+	if (sock < 0) {
+		dbg("socket: %s\n", strerror(errno));
+		goto end;
+	}
+
+	if (setsockopt(sock, IPPROTO_IPV6, IPV6_RECVPKTINFO,
+		       &val, sizeof(val)) < 0) {
+		dbg("cannot set IPV6_RECVPKTINFO: %s\n", strerror(errno));
+		goto end;
+	}
+	if (setsockopt(sock, IPPROTO_IPV6, IPV6_RECVHOPLIMIT,
+		       &val, sizeof(val)) < 0) {
+		dbg("cannot set IPV6_RECVHOPLIMIT: %s\n", strerror(errno));
+		goto end;
+	}
+	if (setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &filter,
+		       sizeof(struct icmp6_filter)) < 0) {
+		dbg("cannot set ICMPV6_FILTER: %s\n", strerror(errno));
+		goto end;
+	}
 
 	ipv6_addr_solict_mult(addr, &solicit);
-	if_mc_group(sock, ifi, &in6addr_all_nodes_mc, IPV6_JOIN_GROUP);
-	if_mc_group(sock, ifi, &solicit, IPV6_JOIN_GROUP);
-	ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifi, addr);
+	if (if_mc_group(sock, ifi, &in6addr_all_nodes_mc, IPV6_JOIN_GROUP)) {
+		dbg("cannot join all node mc\n");
+		goto end;
+	}
+	if (if_mc_group(sock, ifi, &solicit, IPV6_JOIN_GROUP)) {
+		dbg("cannot joing slicit node mc\n");
+		goto end;
+	}
+	if (ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifi, addr) <= 0) {
+		dbg("Error at sending NS\n");
+		goto end;
+	}
+
 	if (do_ll) {
 		ipv6_addr_llocal(addr, &ll);
-		ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifi, &ll);
+		if (ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifi, &ll) <= 0) {
+			dbg("Error at sending NS (link-local target)\n");
+			goto end;
+		}
 	}
 
 	FD_ZERO(&rset);
@@ -436,7 +472,7 @@ int ndisc_do_dad(int ifi, struct in6_addr *addr, int do_ll)
 		*/
 		if (select(sock+1, &rset, NULL, NULL, &tv) == 0) {
 			dbg("Dad success\n");
-			ret = 0;
+			err = 0;
 			break;
 		}
 		if (!FD_ISSET(sock, &rset))
@@ -452,10 +488,11 @@ int ndisc_do_dad(int ifi, struct in6_addr *addr, int do_ll)
 		if (IN6_ARE_ADDR_EQUAL(addr, &hdr->nd_na_target) ||
 		    (do_ll && IN6_ARE_ADDR_EQUAL(&ll, &hdr->nd_na_target))) {
 			dbg("Failure\n");
-			ret = -1;
 			break;
 		}
 	}
-	close(sock);
-	return ret;
+ end:
+	if (sock >= 0)
+		close(sock);
+	return err;
 }
