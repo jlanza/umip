@@ -32,6 +32,8 @@
 #include <errno.h>
 #include <netinet/icmp6.h>
 #include <net/if.h>
+#include <linux/types.h>
+#include <linux/ipv6_route.h>
 
 #include "debug.h"
 #include "icmp6.h"
@@ -1187,7 +1189,7 @@ static void md_update_router_stats(struct md_router *rtr)
 		  &rtr->lladdr, rtr->hwa, rtr->hwalen, 1);
 
 	route_add(rtr->ifindex, RT_TABLE_MAIN, RTPROT_RA,
-		  RTM_F_DEFAULT|RTM_F_ADDRCONF, 1024,
+		  RTF_DEFAULT|RTF_ADDRCONF, 1024,
 		  &in6addr_any, 0, &in6addr_any, 0, &rtr->lladdr);
 	
 	list_for_each(list, &rtr->prefixes) {
