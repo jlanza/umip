@@ -525,7 +525,7 @@ static int home_tnl_del(int old_if, int new_if, struct home_tnl_ops_parm *p)
 		ha_ipsec_tnl_pol_del(our_addr, peer_addr, p->bce->tunnel);
 	}
 	/* delete HoA route */
-	route_del(old_if, RT6_TABLE_MIP6,
+	route_del(old_if, RT6_TABLE_MAIN,
 		  IP6_RT_PRIO_MIP6_FWD, NULL, 0, peer_addr, 128, NULL);
 	/* update tunnel interface */
 	p->bce->tunnel = new_if;
@@ -548,7 +548,7 @@ static int home_tnl_add(int old_if, int new_if, struct home_tnl_ops_parm *p)
 	p->bce->tunnel = new_if;
 
 	/* add HoA route */
-	if (route_add(new_if, RT6_TABLE_MIP6,
+	if (route_add(new_if, RT6_TABLE_MAIN,
 		      RTPROT_MIP, 0, IP6_RT_PRIO_MIP6_FWD,
 		      NULL, 0, peer_addr, 128, NULL) < 0) {
 		p->ba_status = IP6_MH_BAS_INSUFFICIENT;
