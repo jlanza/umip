@@ -148,13 +148,13 @@ AM_CONDITIONAL(MISSING,
 	x$ac_cv_func_inet6_rth_gettype = xno)
 
 AC_MSG_NOTICE([*** checking for Mobile IPv6 support in kernel headers])
-AC_CHECK_DECLS([IFA_F_HOMEADDRESS,RTPROT_MIP],,
+AC_CHECK_DECLS([IFA_F_HOMEADDRESS],,
 	[AC_MSG_ERROR([kernel headers do not support MIPv6.
 
 *** If working Linux kernel headers are not in the default include path,
 *** please use CPPFLAGS variable to specify where they can be found 
 *** (e.g. CPPFLAGS="-isystem /usr/src/linux/include")
-])], [#include <linux/rtnetlink.h>])
+])], [#include <linux/if_addr.h>])
 
 AC_MSG_NOTICE([*** checking for Mobile IPv6 extensions in system headers])
 AC_CHECK_HEADERS([netinet/in.h netinet/ip6.h netinet/icmp6.h netinet/ip6mh.h])

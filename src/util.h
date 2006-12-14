@@ -209,4 +209,12 @@ static inline long max(long a, long b)
 	return (a > b) ? a : b;
 }
 
+/*
+ * XXX: These may be missing on kernel header because either kernel is not
+ * ready or should be removed since kernel will never support it.
+ */
+#ifndef RTPROT_MIP
+#define RTPROT_MIP	16
+#endif
+
 #endif /* __UTIL_H__ */

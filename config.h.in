@@ -10,10 +10,6 @@
    you don't. */
 #undef HAVE_DECL_IFA_F_HOMEADDRESS
 
-/* Define to 1 if you have the declaration of `RTPROT_MIP', and to 0 if you
-   don't. */
-#undef HAVE_DECL_RTPROT_MIP
-
 /* Define to 1 if you don't have `vprintf' but do have `_doprnt.' */
 #undef HAVE_DOPRNT
 
