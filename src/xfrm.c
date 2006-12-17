@@ -131,28 +131,40 @@ static void xfrm_tmpl_dump(const struct xfrm_user_tmpl *tmpl)
 
 static void xfrm_policy_dump(const char *msg, int nlmsg_flags, int nlmsg_type,
 			     const struct xfrm_userpolicy_info *sp,
+			     const struct xfrm_userpolicy_type *ptype,
 			     struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
 	int i;
+	char ptype_buf[64];
+	sprintf(ptype_buf, "%u", ptype->type);
+
 	cdbg(msg);
 	nlmsg_dump(nlmsg_flags, nlmsg_type);
 	xfrm_sel_dump(&sp->sel);
 	cdbg("priority %d\n"
 	     "dir %d\n"
-	     "action %d\n",
+	     "action %d\n"
+	     "type %s\n",
 	    sp->priority,
 	    sp->dir,
-	    sp->action);
+	    sp->action,
+	    ptype_buf);
 	for (i = 0; i < num_tmpl; i++)
 		xfrm_tmpl_dump(&tmpls[i]);
 }
 
 static void xfrm_policy_id_dump(const char *msg, 
-				const struct xfrm_userpolicy_id *sp_id)
+				const struct xfrm_userpolicy_id *sp_id,
+				const struct xfrm_userpolicy_type *ptype)
 {
+	char ptype_buf[64];
+	sprintf(ptype_buf, "%u", ptype->type);
 	cdbg(msg);
 	xfrm_sel_dump(&sp_id->sel);
-	cdbg("dir %d\n", sp_id->dir);
+	cdbg("dir %d\n"
+	     "type %s\n",
+	     sp_id->dir,
+	     ptype_buf);
 }
 
 static void xfrm_state_dump(const char *msg, int nlmsg_flags, int nlmsg_type,
@@ -335,10 +347,15 @@ static int xfrm_policy_add(const struct xfrm_selector *sel, int update,
 			   struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
 	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_userpolicy_info))
+		    + RTA_LENGTH(sizeof(struct xfrm_userpolicy_type))
 		    + RTA_LENGTH(sizeof(struct xfrm_user_tmpl) 
 				 * MIPV6_MAX_TMPLS)];
 	struct nlmsghdr *n;
 	struct xfrm_userpolicy_info *pol;
+	struct xfrm_userpolicy_type ptype = {
+		.type = XFRM_POLICY_TYPE_SUB
+	};
+
 	int err;
 	memset(buf, 0, sizeof(buf));
 	n = (struct nlmsghdr *)buf;
@@ -358,6 +375,8 @@ static int xfrm_policy_add(const struct xfrm_selector *sel, int update,
 	pol->action = action;
 	pol->share = XFRM_SHARE_ANY;
 
+	addattr_l(n, sizeof(buf), XFRMA_POLICY_TYPE, &ptype, sizeof(ptype));
+
 	if(num_tmpl > 0)
 		addattr_l(n, sizeof(buf), XFRMA_TMPL, 
 			  tmpls, sizeof(struct xfrm_user_tmpl) * num_tmpl);
@@ -365,15 +384,20 @@ static int xfrm_policy_add(const struct xfrm_selector *sel, int update,
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0)
 		xfrm_policy_dump("Failed to add policy:\n",
 				 n->nlmsg_flags, n->nlmsg_type, 
-				 pol, tmpls, num_tmpl);
+				 pol, &ptype, tmpls, num_tmpl);
 	return err;
 }
 
 static int xfrm_policy_del(const struct xfrm_selector *sel, int dir)
 {
-	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_userpolicy_id))];
+	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_userpolicy_id))
+		    + RTA_LENGTH(sizeof(struct xfrm_userpolicy_type))
+		];
 	struct nlmsghdr *n;
 	struct xfrm_userpolicy_id *pol_id;
+	struct xfrm_userpolicy_type ptype = {
+		.type = XFRM_POLICY_TYPE_SUB
+	};
 	int err;
 
 	memset(buf, 0, sizeof(buf));
@@ -386,8 +410,10 @@ static int xfrm_policy_del(const struct xfrm_selector *sel, int dir)
 	memcpy(&pol_id->sel, sel, sizeof(struct xfrm_selector));
 	pol_id->dir = dir;
 
+	addattr_l(n, sizeof(buf), XFRMA_POLICY_TYPE, &ptype, sizeof(ptype));
+
 	if ((err = rtnl_xfrm_do(n, NULL)) < 0)
-		xfrm_policy_id_dump("Failed to del policy:\n", pol_id);
+		xfrm_policy_id_dump("Failed to del policy:\n", pol_id, &ptype);
 	return err;
 }
 
