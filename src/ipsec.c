@@ -474,7 +474,7 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 		ifindex, MIP6_ENTITY_HA);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, hoa, e->reqid_toha);
-	if (xfrm_policy_mod(&sp, &tmpl, 1, add) < 0) {
+	if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
 		dbg("modifying INBOUND policy failed\n");
 		err = -1;
 		goto end;
@@ -485,7 +485,7 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 		ifindex, MIP6_ENTITY_HA);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, hoa, e->reqid_toha);
-	if (xfrm_policy_mod(&sp, &tmpl, 1, add) < 0) {
+	if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
 		dbg("modifying FORWARD policy failed\n");
 		err = -1;
 		goto end;
@@ -496,7 +496,7 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 		ifindex, MIP6_ENTITY_HA);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  hoa, haaddr, e->reqid_tomn);
-	if (xfrm_policy_mod(&sp, &tmpl, 1, add) < 0) {
+	if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
 		dbg("modifying OUTBOUND policy failed\n");
 		err = -1;
 		goto end;
@@ -703,7 +703,7 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 		ifindex, MIP6_ENTITY_MN);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  hoa, haaddr, e->reqid_tomn);
-	if (xfrm_policy_mod(&sp, &tmpl, 1, add) < 0) {
+	if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
 		dbg("modifying INBOUND policy failed.\n");
 		err = -1;
 		goto end;
@@ -714,7 +714,7 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 		ifindex, MIP6_ENTITY_MN);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, hoa, e->reqid_toha);
-	if (xfrm_policy_mod(&sp, &tmpl, 1, add) < 0) {
+	if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
 		dbg("modifying OUTBOUND policy failed.\n");
 		err = -1;
 		goto end;

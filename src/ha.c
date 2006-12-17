@@ -632,7 +632,7 @@ static void home_cleanup(struct bcentry *bce)
 		tunnel_del(bce->tunnel, home_tnl_ops, &p);
 	}
 	if (conf.UseMnHaIPsec) {
-		ha_mn_ipsec_pol_mod(&bce->our_addr, &bce->peer_addr, 0);
+		ha_mn_ipsec_pol_mod(&bce->our_addr, &bce->peer_addr);
 	}
 }
 

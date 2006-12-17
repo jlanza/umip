@@ -85,12 +85,12 @@ int xfrm_block_hoa(struct home_addr_info *hai);
 void xfrm_unblock_hoa(struct home_addr_info *hai);
 
 int ha_mn_ipsec_pol_mod(struct in6_addr *haaddr,
-			struct in6_addr *hoa, int add);
+			struct in6_addr *hoa);
 
-int xfrm_policy_mod(struct xfrm_userpolicy_info *sp,
-		    struct xfrm_user_tmpl *tmpl,
-		    int num_tmpl,
-		    int cmd);
+int xfrm_ipsec_policy_mod(struct xfrm_userpolicy_info *sp,
+			  struct xfrm_user_tmpl *tmpl,
+			  int num_tmpl,
+			  int cmd);
 
 static inline int pre_bu_bul_update(struct bulentry *bule)
 {
