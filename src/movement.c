@@ -1181,6 +1181,7 @@ static void md_router_timeout_probe(struct tq_elem *tqe)
 static void md_update_router_stats(struct md_router *rtr)
 {
 	struct list_head *list;
+	struct in6_addr coa;
 
 	MDBG2("adding default route via %x:%x:%x:%x:%x:%x:%x:%x\n", 
 	      NIP6ADDR(&rtr->lladdr));
@@ -1198,9 +1199,16 @@ static void md_update_router_stats(struct md_router *rtr)
 		/* pass prefix to kernel if it was included in the latest RA */
 		if (!tsbefore(rtr->timestamp, p->timestamp) &&
 		    p->ple_prefd_time <= p->ple_valid_time) {
-			MDBG2("adding prefix %x:%x:%x:%x:%x:%x:%x:%x/%d\n", 
-			      NIP6ADDR(&p->ple_prefix), p->ple_plen);
-			prefix_add(rtr->ifindex, &p->pinfo);
+			ipv6_addr_set(&coa,
+				(&p->ple_prefix)->s6_addr32[0],
+				(&p->ple_prefix)->s6_addr32[1],
+				(&(rtr->iface)->lladdr)->s6_addr32[2],
+				(&(rtr->iface)->lladdr)->s6_addr32[3]);
+			MDBG("add coa %x:%x:%x:%x:%x:%x:%x:%x on interface (%d)\n",
+						NIP6ADDR(&coa),rtr->ifindex);
+
+			addr_add(&coa, p->ple_plen, 0, RT_SCOPE_UNIVERSE,
+				rtr->ifindex, p->ple_prefd_time,p->ple_valid_time);
 
 			if (p->ple_flags & ND_OPT_PI_FLAG_RADDR)
 				neigh_add(rtr->ifindex, NUD_STALE,
