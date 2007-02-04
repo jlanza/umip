@@ -874,6 +874,14 @@ void mh_send_be(struct in6_addr *dst, struct in6_addr *hoa,
 	struct iovec iov;
 	struct in6_addr_bundle out;
 
+	if (IN6_IS_ADDR_UNSPECIFIED(dst) ||
+	    IN6_IS_ADDR_LOOPBACK(dst) ||
+	    IN6_IS_ADDR_MULTICAST(dst)) {
+		MDBG("Omit BE for non-unicast "
+		     "%x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(dst));
+		return;
+	}
+
 	out.remote_coa = NULL;
 	out.local_coa = NULL;
 	be = mh_create(&iov, IP6_MH_TYPE_BERROR);
