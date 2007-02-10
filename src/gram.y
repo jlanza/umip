@@ -512,6 +512,17 @@ ipsecpolicydef	: ipsectype ipsecprotos ipsecreqid xfrmaction ';'
 				e->ha_addr = ipsec_ps.ha;
 				e->mn_addr = hai->hoa.addr;
 				e->type = $1;
+#ifndef XFRM_MSG_MIGRATE
+				switch (e->type) {
+				case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
+				case IPSEC_POLICY_TYPE_TUNNELMH:
+				case IPSEC_POLICY_TYPE_TUNNELPAYLOAD:
+					uerror("cannot use IPsec tunnel because it is not built with MIGRATE");
+					return -1;
+				default:
+					break;
+				}
+#endif
 #ifndef MULTIPROTO_MIGRATE
 				if ($2 != IPSEC_PROTO_ESP) {
 					uerror("only UseESP is allowed");

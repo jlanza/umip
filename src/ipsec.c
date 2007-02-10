@@ -77,6 +77,7 @@ static void _set_tmpl(struct xfrm_user_tmpl *tmpl,
                 memcpy(&tmpl->saddr, tsrc, sizeof(struct in6_addr));
 }
 
+#ifdef XFRM_MSG_MIGRATE
 /*
  * xfrm_sendmigrate -- send MIGRATE message to the kernel
  *
@@ -150,6 +151,16 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
 
 	return ((err == 0 || err == -ENOENT) ? 0 : -1);
 }
+#else
+static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
+			    const struct xfrm_user_tmpl *tmpl,
+			    const struct in6_addr *ndst,
+			    const struct in6_addr *nsrc)
+{
+	dbg("Error because it is built without XFRM_MSG_MIGRATE\n");
+	return -1;
+}
+#endif
 
 int ipsec_policy_apply(const struct in6_addr *haaddr,
 		       const struct in6_addr *hoa,
