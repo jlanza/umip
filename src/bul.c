@@ -146,7 +146,7 @@ void bul_update_timer(struct bulentry *bule)
 	struct timespec timer_expire;
 	tsadd(bule->delay, bule->lastsent, timer_expire);
 	dbg("Updating timer\n");
-	dump_bule(bule, sdbg);
+	dbg_func(bule, dump_bule);
 	add_task_abs(&timer_expire, &bule->tqe, bule->callback);
 }
 
@@ -190,7 +190,7 @@ int bul_add(struct bulentry *bule)
 	}
 	tsadd(bule->delay, bule->lastsent, timer_expire);
 	dbg("Adding bule\n");
-	dump_bule(bule, sdbg);
+	dbg_func(bule, dump_bule);
 	add_task_abs(&timer_expire, &bule->tqe, bule->callback);
 	return 0;
 home_bul_free:
@@ -236,7 +236,7 @@ void bul_delete(struct bulentry *bule)
 	while (bule->ext_cleanup)
 		bule->ext_cleanup(bule);
 	dbg("Deleting bule\n");
-	dump_bule(bule, sdbg);
+	dbg_func(bule, dump_bule);
 	free_bule(bule);
 }
 

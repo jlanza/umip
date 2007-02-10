@@ -17,6 +17,7 @@ struct mip6_config {
 #endif
 	unsigned int mip6_entity;
 	unsigned int debug_level;
+	char *debug_log_file;
 	struct pmgr_cb pmgr;
 	struct list_head net_ifaces;
 	struct list_head bind_acl;

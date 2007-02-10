@@ -107,6 +107,7 @@ static void uerror(const char *fmt, ...) {
 
 %token		MIP6ENTITY
 %token		DEBUGLEVEL
+%token		DEBUGLOGFILE
 %token		DOROUTEOPTIMIZATIONCN
 %token		DOROUTEOPTIMIZATIONMN
 %token		HOMEADDRESS
@@ -193,6 +194,10 @@ topdef		: MIP6ENTITY mip6entity ';'
 		| DEBUGLEVEL NUMBER ';'
 		{
 			conf.debug_level = $2;
+		}
+		| DEBUGLOGFILE QSTRING ';'
+		{
+			conf.debug_log_file = $2;
 		}
 		| NONVOLATILEBINDINGCACHE BOOL ';'
 		{

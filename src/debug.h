@@ -5,21 +5,24 @@
 
 #include <stdio.h>
 
-extern FILE *sdbg;
-
 #ifdef MIP6_NDEBUG
 #define NDEBUG 1
 #define dbg(...)
 #define cdbg(...)
 #define dbg_buf(...)
+#define dbg_func(arg, func)
 #define BUG(x)
 #define pthread_dbg(x)
 #define TRACE
+static inline int debug_open(const char *path){ return 0; }
+static inline void debug_close(void){}
+static inline void debug_init(void){}
 #else
 #define dbg(...) dbgprint(__FUNCTION__, __VA_ARGS__)
 #define cdbg(...) dbgprint(NULL, __VA_ARGS__)
 #define dbg_buf(data, len, ...) \
 	debug_print_buffer(data, len, __FUNCTION__, __VA_ARGS__)
+#define dbg_func(arg, func) debug_print_func(arg, func)
 
 #define BUG(x) dbgprint("BUG", "%s %d %s\n", __FUNCTION__, __LINE__, x)
 #define TRACE dbgprint(__FUNCTION__, "%d\n", __LINE__)
@@ -28,6 +31,11 @@ void dbgprint(const char *fname, const char *fmt, ...);
 
 void debug_print_buffer(const void *data, int len, const char *fname,
 			const char *fmt, ...);
+void debug_print_func(void *arg, void (*func)(void *arg, void *stream));
+
+int debug_open(const char *path);
+void debug_close(void);
+void debug_init(void);
 
 #ifndef DEBUG_LOCKING
 

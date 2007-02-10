@@ -62,6 +62,7 @@ static void conf_usage(char *exec_name)
 #endif
 		"\n These options override values read from config file:\n"
 		"  -d <number>              Set debug level (0-10)\n"
+		"  -l <file>                Write debug log to <file> instead of stderr\n"
 		"  -C, --correspondent-node Node is CN\n"
 		"  -H, --home-agent         Node is HA\n"
 		"  -M, --mobile-node        Node is MN\n\n"
@@ -141,7 +142,7 @@ static int conf_cmdline(struct mip6_config *cfg, int argc, char **argv)
 	/* parse all other cmd line parameters than -c */
 	while (1) {
 		int idx, c;
-		c = getopt_long(argc, argv, "c:d:Vh?CMH", long_opts, &idx);
+		c = getopt_long(argc, argv, "c:d:l:Vh?CMH", long_opts, &idx);
 		if (c == -1) break;
 
 		switch (c) {
@@ -164,6 +165,9 @@ static int conf_cmdline(struct mip6_config *cfg, int argc, char **argv)
 			return -1;
 		case 'd':
 			cfg->debug_level = atoi(optarg);
+			break;
+		case 'l':
+			cfg->debug_log_file = optarg;
 			break;
 		case 'C':
 			cfg->mip6_entity = MIP6_ENTITY_CN;
@@ -267,6 +271,8 @@ void conf_show(struct mip6_config *c)
 #endif
 	dbg("mip6_entity = %u\n", c->mip6_entity);
 	dbg("debug_level = %u\n", c->debug_level);
+	dbg("debug_log_file = %s\n", (c->debug_log_file ? c->debug_log_file :
+				      "stderr"));
 	if (c->pmgr.so_path)
 		dbg("PolicyModulePath = %s\n", c->pmgr.so_path);
 	dbg("DefaultBindingAclPolicy = %u\n", c->DefaultBindingAclPolicy);

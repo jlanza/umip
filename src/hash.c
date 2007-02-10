@@ -185,7 +185,7 @@ int hash_add(const struct hash *h, void *data,
 	assert(peer_addr);
 
 	if ((new = (struct hash_entry *)malloc(sizeof(struct hash_entry))) == NULL) {
-		fprintf(stderr, "hash_add: out of memeory\n");
+		dbg("out of memeory\n");
 		return -ENOMEM;
 	}
 	new->our_addr = our_addr;

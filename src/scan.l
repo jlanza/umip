@@ -85,6 +85,7 @@ HA				{ return MIP6HA; }
 CN				{ return MIP6CN; }
 MN				{ return MIP6MN; }
 DebugLevel			{ return DEBUGLEVEL; }
+DebugLogFile			{ return DEBUGLOGFILE; }
 DoRouteOptimizationCN		{ return DOROUTEOPTIMIZATIONCN; }
 DoRouteOptimizationMN		{ return DOROUTEOPTIMIZATIONMN; }
 HomeAddress			{ return HOMEADDRESS; }

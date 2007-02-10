@@ -955,7 +955,7 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 	    NIP6ADDR(in->local_coa != NULL ? in->local_coa : &in6addr_any),
 	    ba->ip6mhba_status);
 	dbg("Dumping corresponding BULE\n");
-	dump_bule(bule, sdbg);
+	dbg_func(bule, dump_bule);
 	/* First check authenticator */
 	if (!(bule->flags & IP6_MH_BU_HOME) &&
 	    mn_chk_bauth(ba, len, &mh_opts, bule)) {
@@ -2254,7 +2254,7 @@ static void mn_recv_brr(const struct ip6_mh *mh, ssize_t len,
 		return;
 	}
 	dbg("Received BRR\n");
-	dump_bule(e, sdbg);
+	dbg_func(e, dump_bule);
 	clock_gettime(CLOCK_REALTIME, &now);
 
 	/* Do we need a binding?  */

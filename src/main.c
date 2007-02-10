@@ -80,6 +80,7 @@ static void terminate(void)
 	/* got SIGINT, cleanup and exit */
 	syslog(LOG_INFO, "terminated (SIGINT)");
 	dbg("got SIGINT, exiting\n");
+	debug_close();
 	pthread_exit(NULL);
 }
 
@@ -176,7 +177,7 @@ int main(int argc, char **argv)
 	int logflags = 0;
 	int ret = 1;
 
-	sdbg = stderr;
+	debug_init();
 
 	sigemptyset(&sigblock);
 	sigaddset(&sigblock, SIGHUP);
@@ -206,8 +207,21 @@ int main(int argc, char **argv)
 	if (conf.debug_level == 0)
 		daemon_start(1);
 	else {
-		dbg("%s started in debug mode, not detaching from terminal\n",
-		    PACKAGE_NAME);
+		/* if debugging with debug log file, detach from tty */
+		if (conf.debug_log_file) {
+			daemon_start(1);
+
+			ret = debug_open(conf.debug_log_file);
+			if (ret < 0) {
+				fprintf(stderr, "can't init debug log:%s\n",
+					strerror(-ret));
+				goto debug_failed;
+			}
+			dbg("%s started in debug mode\n", PACKAGE_NAME);
+		} else {
+			dbg("%s started in debug mode, not detaching from terminal\n",
+			    PACKAGE_NAME);
+		}
 		conf_show(&conf);
 	}
 
@@ -270,6 +284,8 @@ taskqueue_failed:
 	policy_cleanup();
 policy_failed:
 rr_cn_failed:
+	debug_close();
+debug_failed:
 #ifdef ENABLE_VT
 vt_failed:
 #endif

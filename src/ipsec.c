@@ -125,20 +125,20 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
 	xpid.dir = sp->dir;
 
 #if 0
-	fprintf(stderr, "sel.family = %d\n", xpid.sel.family);
-	fprintf(stderr, "sel.saddr = %x:%x:%x:%x:%x:%x:%x:%x\n",
-		NIP6ADDR((struct in6_addr *)&xpid.sel.saddr));
-	fprintf(stderr, "sel.prefixlen_s = %d\n", xpid.sel.prefixlen_s);
-	fprintf(stderr, "sel.sport = %d\n", xpid.sel.sport);
-	fprintf(stderr, "sel.sport_mask = %d\n", xpid.sel.sport_mask);
-	fprintf(stderr, "sel.daddr = %x:%x:%x:%x:%x:%x:%x:%x\n",
-		NIP6ADDR((struct in6_addr *)&xpid.sel.daddr));
-	fprintf(stderr, "sel.prefixlen_d = %d\n", xpid.sel.prefixlen_d);
-	fprintf(stderr, "sel.dport = %d\n", xpid.sel.dport);
-	fprintf(stderr, "sel.dport_mask = %d\n", xpid.sel.dport_mask);
-	fprintf(stderr, "sel.proto = %d\n", xpid.sel.proto);
-	fprintf(stderr, "sel.ifindex = %d\n", xpid.sel.ifindex);
-	fprintf(stderr, "sel.user = %d\n", xpid.sel.user);
+	dbg("sel.family = %d\n", xpid.sel.family);
+	dbg("sel.saddr = %x:%x:%x:%x:%x:%x:%x:%x\n",
+	    NIP6ADDR((struct in6_addr *)&xpid.sel.saddr));
+	dbg("sel.prefixlen_s = %d\n", xpid.sel.prefixlen_s);
+	dbg("sel.sport = %d\n", xpid.sel.sport);
+	dbg("sel.sport_mask = %d\n", xpid.sel.sport_mask);
+	dbg("sel.daddr = %x:%x:%x:%x:%x:%x:%x:%x\n",
+	    NIP6ADDR((struct in6_addr *)&xpid.sel.daddr));
+	dbg("sel.prefixlen_d = %d\n", xpid.sel.prefixlen_d);
+	dbg("sel.dport = %d\n", xpid.sel.dport);
+	dbg("sel.dport_mask = %d\n", xpid.sel.dport_mask);
+	dbg("sel.proto = %d\n", xpid.sel.proto);
+	dbg("sel.ifindex = %d\n", xpid.sel.ifindex);
+	dbg("sel.user = %d\n", xpid.sel.user);
 #endif
 
 	addattr_l(&req.n, sizeof(req), XFRMA_POLICY,

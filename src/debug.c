@@ -34,7 +34,7 @@
 
 #include "debug.h"
 
-FILE *sdbg;
+static FILE *sdbg;
 
 static const char *dbg_strdate(char *str)
 {
@@ -69,14 +69,15 @@ void dbgprint(const char *fname, const char *fmt, ...)
  
         va_start(args, fmt);
         vsprintf(s, fmt, args);
+        va_end(args);
 
 	memset(stime, '\0', sizeof(stime));
-	fprintf(stderr, "%s ", dbg_strdate(stime));
+	fprintf(sdbg, "%s ", dbg_strdate(stime));
 
 	if (fname)
-		fprintf(stderr, "%s: ", fname);
-	fprintf(stderr, "%s", s);
-        va_end(args);
+		fprintf(sdbg, "%s: ", fname);
+	fprintf(sdbg, "%s", s);
+	fflush(sdbg);
 }
 
 void debug_print_buffer(const void *data, int len, const char *fname, 
@@ -88,12 +89,48 @@ void debug_print_buffer(const void *data, int len, const char *fname,
  
         va_start(args, fmt);
         vsprintf(s, fmt, args);
-        fprintf(stderr, "%s: %s", fname, s);
+        fprintf(sdbg, "%s: %s", fname, s);
         va_end(args);
 	for (i = 0; i < len; i++) { 
-		if (i % 16 == 0) fprintf(stderr, "\n%04x: ", i); 
-		fprintf(stderr, "%02x ", ((unsigned char *)data)[i]); 
+		if (i % 16 == 0) fprintf(sdbg, "\n%04x: ", i);
+		fprintf(sdbg, "%02x ", ((unsigned char *)data)[i]);
 	} 
-	fprintf(stderr, "\n\n"); 
-	
+	fprintf(sdbg, "\n\n");
+	fflush(sdbg);
 }
+
+void debug_print_func(void *arg, void (*func)(void *arg, void *stream))
+{
+	func(arg, sdbg);
+	fflush(sdbg);
+}
+
+int debug_open(const char *path)
+{
+	FILE *fp;
+
+	if (!path)
+		return -EINVAL;
+	if (sdbg && sdbg != stderr)
+		return -EALREADY;
+
+	fp = fopen(path, "a");
+	if (!fp)
+		return -errno;
+	sdbg = fp;
+
+	return 0;
+}
+
+void debug_close(void)
+{
+	if (sdbg && sdbg != stderr)
+		fclose(sdbg);
+	debug_init();
+}
+
+void debug_init(void)
+{
+	sdbg = stderr;
+}
+
