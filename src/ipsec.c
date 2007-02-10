@@ -109,7 +109,9 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
         req.n.nlmsg_len = NLMSG_LENGTH(sizeof(req.m));
         req.n.nlmsg_flags = NLM_F_REQUEST;
         req.n.nlmsg_type = XFRM_MSG_MIGRATE;
-        req.m.family = sp->sel.family;
+	req.m.old_family = AF_INET6;
+	req.m.new_family = AF_INET6;
+
 	req.m.proto = tmpl->id.proto;
 	req.m.mode = tmpl->mode;
 	req.m.reqid = tmpl->reqid;
