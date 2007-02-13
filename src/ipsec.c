@@ -72,9 +72,73 @@ static void _set_tmpl(struct xfrm_user_tmpl *tmpl,
 	tmpl->mode = mode;
 	tmpl->reqid = reqid;
 	if (mode == XFRM_MODE_TUNNEL && tdst)
-                memcpy(&tmpl->id.daddr, tdst, sizeof(struct in6_addr));
+                memcpy(&tmpl->id.daddr, tdst, sizeof(tmpl->id.daddr));
 	if (mode == XFRM_MODE_TUNNEL && tsrc)
-                memcpy(&tmpl->saddr, tsrc, sizeof(struct in6_addr));
+                memcpy(&tmpl->saddr, tsrc, sizeof(tmpl->saddr));
+}
+
+static void _set_sp(struct xfrm_userpolicy_info *sp,
+		    struct ipsec_policy_entry *e,
+		    int dir,
+		    const struct in6_addr *in6_dst,
+		    const struct in6_addr *in6_src,
+		    int ifindex,
+		    int nodetype)
+{
+	assert(sp);
+	assert(e);
+	assert(in6_dst);
+	assert(in6_src);
+
+	memset(sp, 0, sizeof(*sp));
+
+	sp->sel.family = AF_INET6;
+	sp->dir = dir;
+	sp->action = e->action;
+	memcpy(&sp->sel.saddr.a6, in6_src, sizeof(sp->sel.saddr.a6));
+	memcpy(&sp->sel.daddr.a6, in6_dst, sizeof(sp->sel.daddr.a6));
+	sp->sel.prefixlen_s = IN6_ARE_ADDR_EQUAL(in6_src, &in6addr_any) ?
+				0 : 128;
+	sp->sel.prefixlen_d = IN6_ARE_ADDR_EQUAL(in6_dst, &in6addr_any) ?
+				0 : 128;
+	sp->sel.ifindex = ifindex;
+
+	switch (e->type) {
+	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
+		sp->priority = MIP6_PRIO_RO_SIG_RR;
+		if (dir == XFRM_POLICY_IN) {
+			if (nodetype == MIP6_ENTITY_MN)
+				sp->sel.sport = htons(IP6_MH_TYPE_HOT);
+			else if (nodetype == MIP6_ENTITY_HA)
+				sp->sel.sport = htons(IP6_MH_TYPE_HOTI);
+			else
+				sp->sel.sport = 0;
+		} else if (dir == XFRM_POLICY_OUT) {
+			if (nodetype == MIP6_ENTITY_MN)
+				sp->sel.sport = htons(IP6_MH_TYPE_HOTI);
+			else if (nodetype == MIP6_ENTITY_HA)
+				sp->sel.sport = htons(IP6_MH_TYPE_HOT);
+			else
+				sp->sel.sport = 0;
+		} else {
+			sp->sel.sport = 0;
+		}
+		sp->sel.proto = IPPROTO_MH;
+		sp->priority = MIP6_PRIO_RO_SIG_RR;
+		break;
+	case IPSEC_POLICY_TYPE_TUNNELMH:
+		sp->sel.proto = IPPROTO_MH;
+		sp->priority = MIP6_PRIO_RO_SIG_RR;
+		break;
+	case IPSEC_POLICY_TYPE_TUNNELPAYLOAD:
+		sp->priority = MIP6_PRIO_RO_SIG_RR;
+		break;
+	default:
+		/* not tunnel IPsec type */
+		break;
+	}
+
+	return;
 }
 
 #ifdef XFRM_MSG_MIGRATE
@@ -96,36 +160,41 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
 			    const struct in6_addr *ndst,
 			    const struct in6_addr *nsrc)
 {
-        struct {
-                struct nlmsghdr n;
-                struct xfrm_user_migrate m;
-                char buf[128];
-        } req;
-	struct xfrm_userpolicy_id xpid;
+	struct {
+		struct nlmsghdr			n;
+		struct xfrm_userpolicy_id	xpid;
+		char				buf[256];
+	} req;
+	struct xfrm_user_migrate um;
 	int err = 0;
 
-        memset(&req, 0, sizeof(req));
+	memset(&req, 0, sizeof(req));
+	memset(&um, 0, sizeof(um));
 
-        req.n.nlmsg_len = NLMSG_LENGTH(sizeof(req.m));
-        req.n.nlmsg_flags = NLM_F_REQUEST;
-        req.n.nlmsg_type = XFRM_MSG_MIGRATE;
-	req.m.old_family = AF_INET6;
-	req.m.new_family = AF_INET6;
+	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(req.xpid));
+	req.n.nlmsg_flags = NLM_F_REQUEST;
+	req.n.nlmsg_type = XFRM_MSG_MIGRATE;
 
-	req.m.proto = tmpl->id.proto;
-	req.m.mode = tmpl->mode;
-	req.m.reqid = tmpl->reqid;
+	/* policy information */
+	memset(&req.xpid, 0, sizeof(req.xpid));
+	memcpy(&req.xpid.sel, &sp->sel, sizeof(req.xpid.sel));
+	req.xpid.index = 0;
+	req.xpid.dir = sp->dir;
 
-        memcpy(&req.m.old_daddr, &tmpl->id.daddr, sizeof(req.m.old_daddr));
-        memcpy(&req.m.old_saddr, &tmpl->saddr, sizeof(req.m.old_saddr));
-        memcpy(&req.m.new_daddr, ndst, sizeof(req.m.new_daddr));
-        memcpy(&req.m.new_saddr, nsrc, sizeof(req.m.new_saddr));
+	/* migrate */
+	um.old_family = AF_INET6;
+	um.new_family = AF_INET6;
+	um.proto = tmpl->id.proto;
+	um.mode = tmpl->mode;
+	um.reqid = tmpl->reqid;
 
-	/* set policy information */
-	memset(&xpid, 0, sizeof(xpid));
-	memcpy(&xpid.sel, &sp->sel, sizeof(xpid.sel));
-	xpid.index = 0;
-	xpid.dir = sp->dir;
+	memcpy(&um.old_daddr, &tmpl->id.daddr, sizeof(um.old_daddr));
+	memcpy(&um.old_saddr, &tmpl->saddr, sizeof(um.old_saddr));
+	memcpy(&um.new_daddr, ndst, sizeof(um.new_daddr));
+	memcpy(&um.new_saddr, nsrc, sizeof(um.new_saddr));
+
+	addattr_l(&req.n, sizeof(req), XFRMA_MIGRATE,
+		  (void *)&um, sizeof(struct xfrm_user_migrate));
 
 #if 0
 	dbg("sel.family = %d\n", xpid.sel.family);
@@ -143,9 +212,6 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
 	dbg("sel.ifindex = %d\n", xpid.sel.ifindex);
 	dbg("sel.user = %d\n", xpid.sel.user);
 #endif
-
-	addattr_l(&req.n, sizeof(req), XFRMA_POLICY,
-		(void *)&xpid, sizeof(struct xfrm_userpolicy_id));
 
 	err = rtnl_xfrm_do(&req.n, NULL);
 	if (err < 0)
@@ -274,68 +340,6 @@ int ipsec_policy_entry_check(const struct in6_addr *haaddr,
 	return ret;
 }
 
-/*
- *   Set security policy information
- */
-static void _set_sp(struct xfrm_userpolicy_info *sp,
-		    struct ipsec_policy_entry *e,
-		    int dir,
-		    const struct in6_addr *in6_dst,
-		    const struct in6_addr *in6_src,
-		    int ifindex,
-		    int nodetype)
-{
-	assert(sp);
-	assert(e);
-	assert(in6_dst);
-	assert(in6_src);
-	
-	memset(sp, 0, sizeof(*sp));
-
-	sp->sel.family = AF_INET6;	/* XXX */
-	sp->dir = dir;
-	sp->action = e->action;
-	memcpy(&sp->sel.saddr.a6, in6_src, sizeof(struct in6_addr));
-	memcpy(&sp->sel.daddr.a6, in6_dst, sizeof(struct in6_addr));
-	sp->sel.prefixlen_s = IN6_ARE_ADDR_EQUAL(in6_src, &in6addr_any) ?
-				0 : 128;
-	sp->sel.prefixlen_d = IN6_ARE_ADDR_EQUAL(in6_dst, &in6addr_any) ?
-				0 : 128;
-	sp->sel.ifindex = ifindex;
-	
-	switch (e->type) {
-	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
-		sp->priority = MIP6_PRIO_RO_SIG_RR;
-                if (dir == XFRM_POLICY_IN) {
-                        if (nodetype == MIP6_ENTITY_MN)
-                                sp->sel.sport = htons(IP6_MH_TYPE_HOT);
-                        else if (nodetype == MIP6_ENTITY_HA)
-                                sp->sel.sport = htons(IP6_MH_TYPE_HOTI);
-                        else
-                                sp->sel.sport = 0;
-                } else if (dir == XFRM_POLICY_OUT) {
-                        if (nodetype == MIP6_ENTITY_MN)
-                                sp->sel.sport = htons(IP6_MH_TYPE_HOTI);
-                        else if (nodetype == MIP6_ENTITY_HA)
-                                sp->sel.sport = htons(IP6_MH_TYPE_HOT);
-                        else
-                                sp->sel.sport = 0;
-                } else {
-                        sp->sel.sport = 0;
-                }
-	case IPSEC_POLICY_TYPE_TUNNELMH:
-		sp->sel.proto = IPPROTO_MH;
-	case IPSEC_POLICY_TYPE_TUNNELPAYLOAD:
-		sp->priority = MIP6_PRIO_RO_SIG_RR;
-		break;
-	default:
-		/* not tunnel IPsec type */
-		break;
-	}
-	
-	return;
-}
-
 struct ha_ipsec_tnl_update {
 	int tunnel;
 	struct in6_addr coa;
@@ -396,7 +400,8 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, oldcoa, newcoa);
 
 	/* inbound */
-	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL, haaddr, oldcoa, e->reqid_toha);
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+		  haaddr, oldcoa, e->reqid_toha);
 	_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, hoa,
 		ifindex, MIP6_ENTITY_HA);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
@@ -405,7 +410,8 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	}
 
 	/* forward */
-	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL, haaddr, oldcoa, e->reqid_toha);
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+		  haaddr, oldcoa, e->reqid_toha);
 	_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, hoa,
 		ifindex, MIP6_ENTITY_HA);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
@@ -414,7 +420,8 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	}
 
 	/* outbound */
-	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL, oldcoa, haaddr, e->reqid_tomn);
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+		  oldcoa, haaddr, e->reqid_tomn);
 	_set_sp(&sp, e, XFRM_POLICY_OUT, hoa, &in6addr_any,
 		ifindex, MIP6_ENTITY_HA);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
@@ -619,7 +626,8 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, oldcoa, newcoa);
 
 	/* outbound */
-	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL, haaddr, oldcoa, e->reqid_toha);
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+		  haaddr, oldcoa, e->reqid_toha);
 	_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, hoa,
 		ifindex, MIP6_ENTITY_MN);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
@@ -628,7 +636,8 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 	}
 
 	/* inbound */
-	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL, oldcoa, haaddr, e->reqid_tomn);
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+		  oldcoa, haaddr, e->reqid_tomn);
 	_set_sp(&sp, e, XFRM_POLICY_IN, hoa, &in6addr_any,
 		ifindex, MIP6_ENTITY_MN);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
