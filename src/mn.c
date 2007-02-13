@@ -563,7 +563,7 @@ static int mv_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 	     NIP6ADDR(&hoa->addr), plen, ifa->ifa_index, mha->if_next);
 
 	err = addr_add(&hoa->addr, plen,
-		       ifa->ifa_flags|IFA_F_HOMEADDRESS,
+		       ifa->ifa_flags|IFA_F_HOMEADDRESS_NODAD,
 		       ifa->ifa_scope, mha->if_next, preferred, valid);
 	if (err < 0)
 		return err;
@@ -1190,9 +1190,9 @@ static int flag_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 				     hoa->valid_time.tv_sec);
 	}
 	if (fhoa->flag)
-		ifa->ifa_flags |= IFA_F_HOMEADDRESS;
+		ifa->ifa_flags |= IFA_F_HOMEADDRESS_NODAD;
 	else
-		ifa->ifa_flags &= ~IFA_F_HOMEADDRESS;
+		ifa->ifa_flags &= ~IFA_F_HOMEADDRESS_NODAD;
 
 	MDBG("set HoA %x:%x:%x:%x:%x:%x:%x:%x/%d iif %d flags %x preferred_time %u valid_time %u\n",
 	     NIP6ADDR(addr), plen, ifa->ifa_index, ifa->ifa_flags, preferred, valid);
@@ -1686,7 +1686,7 @@ static int mn_hoa_add(struct home_addr_info *hai,
 		valid = mpd_curr_lft(&now, &hoa->timestamp,
 				     hoa->valid_time.tv_sec);
 
-		flag = IFA_F_HOMEADDRESS;
+		flag = IFA_F_HOMEADDRESS_NODAD;
 	}
 	return addr_add(addr, plen, flag, scope, ifindex, preferred, valid);
 }

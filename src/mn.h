@@ -19,6 +19,8 @@ extern const struct timespec dereg_bu_lifetime_ts;
 #define MN_RR_BEFORE_EXPIRE             1 /* second */
 #define MN_TEST_INIT_DELAY		5 /* XXX: second */
 
+#define	IFA_F_HOMEADDRESS_NODAD	(IFA_F_HOMEADDRESS | IFA_F_NODAD)
+
 #define NON_MIP_CN_LTIME                420 /* s */
 extern const struct timespec non_mip_cn_ltime_ts;
 #define NON_MIP_CN_LTIME_TS non_mip_cn_ltime_ts

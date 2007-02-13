@@ -73,11 +73,15 @@ static pthread_t md_listener;
 
 static int conf_default_autoconf = 1;
 static int conf_default_ra = 1;
+static int conf_default_ra_defrtr = 1;
+static int conf_default_ra_pinfo = 1;
 static int conf_default_rs = 3;
 static int conf_default_rs_ival = 4;
 
 static int conf_autoconf = 1;
-static int conf_ra = 0;
+static int conf_ra = 1;
+static int conf_ra_pinfo = 1;
+static int conf_ra_defrtr = 0;
 static int conf_rs = 0;
 
 static unsigned int adv_ivals_md_trigger = 1;
@@ -130,7 +134,7 @@ static inline void md_free_coa(struct md_coa *coa)
 
 static void md_flush_coa(struct md_coa *coa)
 {
-	if (!(coa->flags&IFA_F_HOMEADDRESS)) {
+	if (!(coa->flags&IFA_F_HOMEADDRESS_NODAD)) {
 		MDBG2("deleting CoA "
 		      "%x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
 		      NIP6ADDR(&coa->addr), coa->ifindex);
@@ -648,7 +652,7 @@ static void iface_proc_entries_init(struct md_inet6_iface *iface)
 {
 	set_iface_proc_entry(PROC_SYS_IP6_AUTOCONF, iface->name,
 			     conf_autoconf);
-	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA, iface->name, conf_ra);
+	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR, iface->name, conf_ra_defrtr);
 	set_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS, iface->name, conf_rs);
 	tssetmsec(iface->reachable, DEFAULT_REACHABLE_TIME);
 	tssetmsec(iface->retransmit, DEFAULT_RETRANSMIT_TIMER);
@@ -1642,15 +1646,15 @@ static void iface_default_proc_entries_init(void)
 {
 	get_iface_proc_entry(PROC_SYS_IP6_AUTOCONF,
 			     "default", &conf_default_autoconf);
-	get_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA,
-			     "default", &conf_default_ra);
+	get_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR,
+			     "default", &conf_default_ra_defrtr);
 	get_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS,
 			     "default", &conf_default_rs);
 	get_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICIT_INTERVAL,
 			     "default", &conf_default_rs_ival);
 
 	set_iface_proc_entry(PROC_SYS_IP6_AUTOCONF, "default", conf_autoconf);
-	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA, "default", conf_ra);
+	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR, "default", conf_ra_defrtr);
 	set_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS, "default", conf_rs);
 }
 
@@ -1719,8 +1723,8 @@ static void iface_default_proc_entries_cleanup(void)
 {
 	set_iface_proc_entry(PROC_SYS_IP6_AUTOCONF,
 			     "default", conf_default_autoconf);
-	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA,
-			     "default", conf_default_ra);
+	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR,
+			     "default", conf_default_ra_defrtr);
 	set_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS,
 			     "default", conf_default_rs);
 }
@@ -1729,8 +1733,8 @@ static void iface_proc_entries_cleanup(struct md_inet6_iface *iface)
 {
 	set_iface_proc_entry(PROC_SYS_IP6_AUTOCONF, iface->name,
 			     iface->devconf[DEVCONF_AUTOCONF]);
-	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA, iface->name,
-			     iface->devconf[DEVCONF_ACCEPT_RA]);
+	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR, iface->name,
+			     iface->devconf[DEVCONF_ACCEPT_RA_DEFRTR]);
 	set_iface_proc_entry(PROC_SYS_IP6_RTR_SOLICITS, iface->name, 
 			     iface->devconf[DEVCONF_RTR_SOLICITS]);
 }
