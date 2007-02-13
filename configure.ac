@@ -154,7 +154,8 @@ AC_CHECK_DECLS([IFA_F_HOMEADDRESS],,
 *** If working Linux kernel headers are not in the default include path,
 *** please use CPPFLAGS variable to specify where they can be found 
 *** (e.g. CPPFLAGS="-isystem /usr/src/linux/include")
-])], [#include <linux/if_addr.h>])
+])], [#include <sys/socket.h>
+#include <linux/if_addr.h>])
 
 AC_MSG_NOTICE([*** checking for Mobile IPv6 extensions in system headers])
 AC_CHECK_HEADERS([netinet/in.h netinet/ip6.h netinet/icmp6.h netinet/ip6mh.h])
