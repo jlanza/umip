@@ -167,9 +167,9 @@ static void md_prefix_rule_del(struct prefix_list_entry *p)
 {
 	struct in6_addr prefix;
 	ipv6_addr_prefix(&prefix, &p->ple_prefix, p->ple_plen);
-	rule_del(NULL, RT6_TABLE_MAIN, IP6_RULE_PRIO_MIP6_COA_OUT, 
+	rule_del(NULL, RT6_TABLE_MAIN, IP6_RULE_PRIO_MIP6_COA_OUT,
 		 RTN_UNICAST, &prefix, p->ple_plen,
-		 &in6addr_any, 0);
+		 &in6addr_any, 0, 0);
 }
 
 static void __md_free_router(struct md_router *rtr)
@@ -287,9 +287,9 @@ static void md_expire_router(struct md_inet6_iface *iface,
 static void md_block_rule_del(struct md_inet6_iface *iface)
 {
 	rule_del(NULL, 0, IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
-		 &in6addr_any, 0, &in6addr_any, 0);
+		 &in6addr_any, 0, &in6addr_any, 0, 0);
 	rule_del(NULL, RT6_TABLE_MAIN, IP6_RULE_PRIO_MIP6_COA_OUT, RTN_UNICAST,
-		 &in6addr_any, 128, &in6addr_any, 0);
+		 &in6addr_any, 128, &in6addr_any, 0, 0);
 	iface->iface_flags &= ~MD_BLOCK_TRAFFIC;
 }
 
@@ -1254,9 +1254,9 @@ static void md_prefix_rule_add(struct prefix_list_entry *p)
 {
 	struct in6_addr prefix;
 	ipv6_addr_prefix(&prefix, &p->ple_prefix, p->ple_plen);
-	rule_add(NULL, RT6_TABLE_MAIN, IP6_RULE_PRIO_MIP6_COA_OUT, 
+	rule_add(NULL, RT6_TABLE_MAIN, IP6_RULE_PRIO_MIP6_COA_OUT,
 		 RTN_UNICAST, &prefix, p->ple_plen,
-		 &in6addr_any, 0);
+		 &in6addr_any, 0, 0);
 }
 
 static void md_update_router(struct md_router *new, struct md_router *old)
@@ -1327,13 +1327,13 @@ static int md_block_rule_add(struct md_inet6_iface *iface)
 	/* Allow DAD probes and RS messages */
 	rule_add(NULL, RT6_TABLE_MAIN,
 		 IP6_RULE_PRIO_MIP6_COA_OUT, RTN_UNICAST,
-		 &in6addr_any, 128, &in6addr_any, 0);	
+		 &in6addr_any, 128, &in6addr_any, 0, 0);
 	/* drop outgoing global traffic until DAD has been performed
 	   on CoA to make routing and tunnel end-point updates atomic
 	   during handoff */
 	return rule_add(NULL, 0,
 			IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
-			&in6addr_any, 0, &in6addr_any, 0);
+			&in6addr_any, 0, &in6addr_any, 0, 0);
 }
 
 static void md_add_default_router(struct md_inet6_iface *iface,

@@ -74,12 +74,12 @@ int route_del(int oif, uint8_t table, uint32_t metric,
 int rule_add(const char *iface, uint8_t table,
 	     uint32_t priority, uint8_t action,
 	     const struct in6_addr *src, int src_plen,
-	     const struct in6_addr *dst, int dst_plen);
+	     const struct in6_addr *dst, int dst_plen, int flags);
 
 int rule_del(const char *iface, uint8_t table,
 	     uint32_t priority, uint8_t action,
 	     const struct in6_addr *src, int src_plen,
-	     const struct in6_addr *dst, int dst_plen);
+	     const struct in6_addr *dst, int dst_plen,int flags);
 
 int rtnl_iterate(int proto, int type, rtnl_filter_t func, void *extarg);
 

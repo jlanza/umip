@@ -41,6 +41,8 @@
 #include <netinet/in.h>
 #include <netinet/ip6.h>
 
+#include <linux/fib_rules.h>
+
 #include "debug.h"
 #include "mipv6.h"
 #include "icmp6.h"
@@ -580,7 +582,7 @@ static int mn_tnl_state_add(struct home_addr_info *hai, int ifindex, int all)
 		if ((err = mn_ro_pol_add(hai, ifindex, all)) < 0)
 			return err;
 		if ((err = route_add(ifindex, RT6_TABLE_MIP6, RTPROT_MIP, 0,
-				     IP6_RT_PRIO_MIP6_OUT, &hai->hoa.addr, 128,
+				     IP6_RT_PRIO_MIP6_OUT, &in6addr_any, 0,
 				     &in6addr_any, 0, NULL)) < 0) {
 			mn_ro_pol_del(hai, ifindex, all);
 		}
@@ -1221,10 +1223,10 @@ static void clean_home_addr_info(struct home_addr_info *hai)
 	bul_home_cleanup(&hai->bul);
 	rule_del(NULL, 0,
 		 IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
-		 &hai->hoa.addr, 128, &in6addr_any, 0);
+		 &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR);
 	rule_del(NULL, RT6_TABLE_MIP6,
 		 IP6_RULE_PRIO_MIP6_HOA_OUT, RTN_UNICAST,
-		 &hai->hoa.addr, 128, &in6addr_any, 0);
+		 &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR);
 	tunnel_del(hai->if_tunnel, NULL, NULL);
 	dhaad_stop(hai);
 	free(hai);
@@ -1308,12 +1310,12 @@ static int conf_home_addr_info(struct home_addr_info *conf_hai)
 	}
 	if (rule_add(NULL, RT6_TABLE_MIP6,
 		     IP6_RULE_PRIO_MIP6_HOA_OUT, RTN_UNICAST,
-		     &hai->hoa.addr, 128, &in6addr_any, 0) < 0) {
+		     &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR) < 0) {
 		goto clean_err;
 	}
 	if (rule_add(NULL, 0,
 		     IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
-		     &hai->hoa.addr, 128, &in6addr_any, 0) < 0) {
+		     &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR) < 0) {
 		goto clean_err;
 	}
 	if(bul_home_init(hai)) {
@@ -1488,14 +1490,14 @@ static inline void linklocal_rt_rules_del(void)
 {
 	rule_del(NULL, RT6_TABLE_MAIN,
 		 IP6_RULE_PRIO_MIP6_COA_OUT, RTN_UNICAST,
-		 &linklocal_prefix, 64, &in6addr_any, 0);
+		 &linklocal_prefix, 64, &in6addr_any, 0, 0);
 }
 
 static inline int linklocal_rt_rules_add(void)
 {
 	return rule_add(NULL, RT6_TABLE_MAIN,
 			IP6_RULE_PRIO_MIP6_COA_OUT, RTN_UNICAST,
-			&linklocal_prefix, 64, &in6addr_any, 0);
+			&linklocal_prefix, 64, &in6addr_any, 0, 0);
 }
 
 static int mn_ext_tunnel_ops(int request, int old_if, int new_if, void *data)

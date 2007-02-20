@@ -298,10 +298,10 @@ int route_del(int oif, uint8_t table, uint32_t metric,
 			 0, metric, src, src_plen, dst, dst_plen, gateway);
 }
 
-static int rule_mod(const char *iface, int cmd, uint8_t table, 
+static int rule_mod(const char *iface, int cmd, uint8_t table,
 		    uint32_t priority, uint8_t action,
 		    const struct in6_addr *src, int src_plen,
-		    const struct in6_addr *dst, int dst_plen)
+		    const struct in6_addr *dst, int dst_plen, int flags)
 {
 	uint8_t buf[512];
 	struct nlmsghdr *n;
@@ -324,6 +324,7 @@ static int rule_mod(const char *iface, int cmd, uint8_t table,
 	rtm->rtm_table = table;
 	rtm->rtm_scope = RT_SCOPE_UNIVERSE;
 	rtm->rtm_type = action;
+	rtm->rtm_flags = flags;
 
 	addattr_l(n, sizeof(buf), RTA_DST, dst, sizeof(*dst));
 	if (src)
@@ -350,11 +351,11 @@ static int rule_mod(const char *iface, int cmd, uint8_t table,
 int rule_add(const char *iface, uint8_t table,
 	     uint32_t priority, uint8_t action,
 	     const struct in6_addr *src, int src_plen,
-	     const struct in6_addr *dst, int dst_plen)
+	     const struct in6_addr *dst, int dst_plen, int flags)
 {
-	return rule_mod(iface, RTM_NEWRULE, table, 
+	return rule_mod(iface, RTM_NEWRULE, table,
 			priority, action,
-			src, src_plen, dst, dst_plen);
+			src, src_plen, dst, dst_plen, flags);
 }
 
 /**
@@ -371,11 +372,11 @@ int rule_add(const char *iface, uint8_t table,
 int rule_del(const char *iface, uint8_t table,
 	     uint32_t priority, uint8_t action,
 	     const struct in6_addr *src, int src_plen,
-	     const struct in6_addr *dst, int dst_plen)
+	     const struct in6_addr *dst, int dst_plen, int flags)
 {
-	return rule_mod(iface, RTM_DELRULE, table, 
+	return rule_mod(iface, RTM_DELRULE, table,
 			priority, action,
-			src, src_plen, dst, dst_plen);
+			src, src_plen, dst, dst_plen, flags);
 }
 
 int rtnl_iterate(int proto, int type, rtnl_filter_t func, void *extarg)

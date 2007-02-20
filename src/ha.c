@@ -985,7 +985,7 @@ int ha_init(void)
 		return -1;
 	if (rule_add(NULL, RT6_TABLE_MIP6,
 		     IP6_RULE_PRIO_MIP6_FWD, RTN_UNICAST,
-		     &in6addr_any, 0, &in6addr_any, 0) < 0)
+		     &in6addr_any, 0, &in6addr_any, 0, 0) < 0)
 		return -1;
 	icmp6_handler_reg(ND_ROUTER_ADVERT, &ha_ra_handler);
 	mh_handler_reg(IP6_MH_TYPE_BU, &ha_bu_handler);
@@ -1003,7 +1003,7 @@ void ha_cleanup(void)
 	bcache_flush();
 	rule_del(NULL, RT6_TABLE_MIP6,
 		 IP6_RULE_PRIO_MIP6_FWD, RTN_UNICAST,
-		 &in6addr_any, 0, &in6addr_any, 0);
+		 &in6addr_any, 0, &in6addr_any, 0, 0);
 	mpd_ha_cleanup();
 	dhaad_ha_cleanup();
 }
