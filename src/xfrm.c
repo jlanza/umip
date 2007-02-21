@@ -653,9 +653,42 @@ static int _mn_ha_ipsec_init(const struct in6_addr *haaddr,
 	return xfrm_ipsec_policy_add(&sel, 0, dir, e->action, prio, &tmpls[0], ti);
 }
 
+static int _mn_ha_ipsec_bypass_init(const struct in6_addr *haaddr,
+				    const struct in6_addr *hoa,
+				    struct ipsec_policy_entry  *e,
+				    void *arg)
+{
+	struct xfrm_selector sel;
+	int prio = MIP6_PRIO_BYPASS_BU;
+	int err = 0;
+
+	/* set bypass policy for allowing MN to send BU over RO path to
+	   its CN. */
+	switch (e->type) {
+	case IPSEC_POLICY_TYPE_MH:
+		set_selector(&in6addr_any, hoa, IPPROTO_MH,
+			     IP6_MH_TYPE_BU, 0, 0, &sel);
+		err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_OUT,
+				            XFRM_POLICY_ALLOW, prio,
+					    NULL, 0);
+		break;
+	default:
+		break;
+	}
+
+	return err;
+}
+
 static inline int mn_ha_ipsec_init(void)
 {
-	return ipsec_policy_walk(_mn_ha_ipsec_init, NULL);
+	int err;
+
+	/* insert bypass policy */
+	err = ipsec_policy_walk(_mn_ha_ipsec_bypass_init, NULL);
+
+	err = ipsec_policy_walk(_mn_ha_ipsec_init, NULL);
+
+	return err;
 }
 
 /* Create a state and policy for receiving routing header type 2 to
@@ -725,8 +758,31 @@ static int _mn_ha_ipsec_cleanup(const struct in6_addr *haaddr,
 	return 0;
 }
 
+static int _mn_ha_ipsec_bypass_cleanup(const struct in6_addr *haaddr,
+				       const struct in6_addr *hoa,
+				       struct ipsec_policy_entry *e,
+				       void *arg)
+{
+	struct xfrm_selector sel;
+	int err = 0;
+
+	switch (e->type) {
+	case IPSEC_POLICY_TYPE_MH:
+		set_selector(&in6addr_any, hoa, IPPROTO_MH,
+			     IP6_MH_TYPE_BU, 0, 0, &sel);
+		err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_OUT);
+		break;
+	default:
+		break;
+	}
+
+	return err;
+}
+
 static inline void mn_ha_ipsec_cleanup(void)
 {
+	ipsec_policy_walk(_mn_ha_ipsec_bypass_cleanup, NULL);
+
 	ipsec_policy_walk(_mn_ha_ipsec_cleanup, NULL);
 }
 

@@ -9,6 +9,7 @@
 #define MIP6_PRIO_HOME_SIG		2
 #define MIP6_PRIO_HOME_SIG_ANY		3
 #define MIP6_PRIO_HOME_BLOCK		4
+#define MIP6_PRIO_BYPASS_BU		4	/* XXX: BU towards CN */
 #define MIP6_PRIO_HOME_DATA_IPSEC	5
 #define MIP6_PRIO_HOME_DATA		6
 #define MIP6_PRIO_RO_SIG_IPSEC		7	/* XXX: BU between MN-MN with IPsec */
