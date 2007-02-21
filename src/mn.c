@@ -95,6 +95,43 @@ static int pending_bas = 0;
 static void mn_send_home_bu(struct home_addr_info *hai);
 static int mn_ext_tunnel_ops(int request, int old_if, int new_if, void *data);
 
+static int mn_block_rule_del(struct home_addr_info *hai)
+{
+	int ret = -1;
+
+	if (!(hai->home_block & HOME_ADDR_RULE_BLOCK)) {
+		MDBG("blackhole is not set.\n");
+		return ret;
+	}
+
+	if ((ret = rule_del(NULL, 0, IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
+		     &hai->hoa.addr, 128, &in6addr_any, 0,
+		     FIB_RULE_FIND_SADDR)) < 0)
+		MDBG("failed to delete blackhole rule.\n");
+	else
+		hai->home_block &= ~HOME_ADDR_RULE_BLOCK;
+
+	return ret;
+}
+
+static int mn_block_rule_add(struct home_addr_info *hai)
+{
+	int ret = -1;
+
+	if (hai->home_block & HOME_ADDR_RULE_BLOCK) {
+		MDBG("blackhole is already set.\n");
+		return ret;
+	}
+	if ((ret = rule_add(NULL, 0, IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
+		     &hai->hoa.addr, 128, &in6addr_any, 0,
+		     FIB_RULE_FIND_SADDR)) < 0)
+		MDBG("failed to delete blackhole rule.\n");
+	else
+		hai->home_block |= HOME_ADDR_RULE_BLOCK;
+
+	return ret;
+}
+
 static void bul_expire(struct tq_elem *tqe)
 {
 	pthread_rwlock_wrlock(&mn_lock);
@@ -1054,6 +1091,7 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 			bul_iterate(&hai->bul, mn_rr_start_handoff, NULL);
 			pthread_rwlock_unlock(&mn_lock);
 			mn_movement_event(NULL);
+			mn_block_rule_del(hai);
 			return;
 		}
 		/* If status of BA is 0 or 1, Binding Update is accepted. */
@@ -1221,9 +1259,9 @@ static void clean_home_addr_info(struct home_addr_info *hai)
 		hai->hoa.iif, &arg, flag_hoa);
 	bul_iterate(&hai->bul, mn_dereg, NULL);
 	bul_home_cleanup(&hai->bul);
-	rule_del(NULL, 0,
-		 IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
-		 &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR);
+
+	mn_block_rule_del(hai);
+
 	rule_del(NULL, RT6_TABLE_MIP6,
 		 IP6_RULE_PRIO_MIP6_HOA_OUT, RTN_UNICAST,
 		 &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR);
@@ -1313,11 +1351,10 @@ static int conf_home_addr_info(struct home_addr_info *conf_hai)
 		     &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR) < 0) {
 		goto clean_err;
 	}
-	if (rule_add(NULL, 0,
-		     IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
-		     &hai->hoa.addr, 128, &in6addr_any, 0, FIB_RULE_FIND_SADDR) < 0) {
+
+	if (mn_block_rule_add(hai) < 0)
 		goto clean_err;
-	}
+
 	if(bul_home_init(hai)) {
 		goto clean_err;
 	}
@@ -1561,6 +1598,7 @@ static int mn_move(struct home_addr_info *hai)
 		}
 	} else {
 		MDBG("in foreign net\n");
+		mn_block_rule_add(hai);
 		if (hai->pend_ba) {
 			hai->pend_ba = 0;
 			pending_bas--;
@@ -1725,6 +1763,9 @@ static int mn_addr_do_dad(int fd, struct home_addr_info *hai,
 				return -1;
 			} else {
 				MDBG("DAD succeeded!\n");
+				MDBG("address = %x:%x:%x:%x:%x:%x:%x:%x\n",
+				     NIP6ADDR(addr));
+				mn_block_rule_del(hai);
 				return 0;
 			}
 		} else {

@@ -47,6 +47,7 @@ struct ha_candidate_list {
 
 #define	HOME_LINK_BLOCK	0x1
 #define	HOME_ADDR_BLOCK	0x2
+#define	HOME_ADDR_RULE_BLOCK	0x4
 
 struct mn_addr {
 	struct in6_addr addr;
