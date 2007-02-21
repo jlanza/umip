@@ -388,19 +388,17 @@ static int ha_plist_vt_dump(int ifindex, void *data, void *arg)
 		if (tsafter(ts_now, ple->timestamp))
 			fprintf(vh->vh_stream, "(broken)");
 		else {
-			struct timespec ts_valid = {
-				ple->ple_valid_time,
-				0
-			};
 			struct timespec ts;
+			uint32_t diff;
+
 			tssub(ts_now, ple->timestamp, ts);
-			/* "ts" is now time how log it alives */
-			if (tsafter(ts_valid, ts)) {
-				tssub(ts, ts_valid, ts);
-				fprintf(vh->vh_stream, "-%lu", ts.tv_sec);
+			diff = ts.tv_sec;
+			if (ple->ple_valid_time < diff) {
+				fprintf(vh->vh_stream, "-%u",
+					diff - ple->ple_valid_time);
 			} else {
-				tssub(ts_valid, ts, ts);
-				fprintf(vh->vh_stream, "%lu", ts.tv_sec);
+				fprintf(vh->vh_stream, "%u",
+					ple->ple_valid_time - diff);
 			}
 		}
 	}
