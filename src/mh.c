@@ -606,7 +606,6 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 			biov->iov_len = orig_len;
 		}
 	}
-		
 
 	memset(&daddr, 0, sizeof(struct sockaddr_in6));
 	daddr.sin6_family = AF_INET6;
