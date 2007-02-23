@@ -1570,10 +1570,7 @@ static int _xfrm_del_bule_data(struct bulentry *bule)
 				XFRM_POLICY_ALLOW, prio, NULL, 0))
 		return -1;
 
-	if (bule->flags & IP6_MH_BU_HOME && conf.UseMnHaIPsec)
-		bule->xfrm_state = 0;
-	else
-		bule->xfrm_state &= ~BUL_XFRM_STATE_DATA;
+	bule->xfrm_state &= ~BUL_XFRM_STATE_DATA;
 	return 0;
 }
 
