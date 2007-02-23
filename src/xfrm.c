@@ -1702,7 +1702,7 @@ int xfrm_post_ba_mod_bule(struct bulentry *bule)
 	prio = (bule->flags & IP6_MH_BU_HOME ?
 		MIP6_PRIO_HOME_DATA : MIP6_PRIO_RO_BULE_DATA);
 	set_selector(&bule->peer_addr, &bule->hoa, 0, 0, 0,
-		     0, &sel);
+		     bule->home->if_tunnel, &sel);
 	create_dstopt_tmpl(&tmpls[0], &bule->peer_addr, &bule->hoa);
 	ret = xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT,
 				   XFRM_POLICY_ALLOW, prio, tmpls, 1);
