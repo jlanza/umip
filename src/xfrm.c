@@ -1164,6 +1164,12 @@ static void _mn_bule_ro_pol_del(struct bulentry *e, int iif)
 	 */
 	set_selector(&e->peer_addr, &e->hoa, 0, 0, 0, 0, &sel);
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
+
+	/*
+	 * XXX: inbound is missed???
+	 */
+	set_selector(&e->hoa, &e->peer_addr, 0, 0, 0, 0, &sel);
+	xfrm_mip_policy_del(&sel, XFRM_POLICY_IN);
 }
 
 static int mn_bule_ro_pol_del(void *vbule, void *viif)
@@ -1670,6 +1676,7 @@ int xfrm_post_ba_mod_bule(struct bulentry *bule)
 	struct xfrm_selector sel;
 	struct xfrm_user_tmpl tmpls[2];
 	int prio;
+	int ret = 0;
 	
 	if (bule->flags & IP6_MH_BU_HOME) {
 		struct home_addr_info *hai = bule->home;
@@ -1697,8 +1704,21 @@ int xfrm_post_ba_mod_bule(struct bulentry *bule)
 	set_selector(&bule->peer_addr, &bule->hoa, 0, 0, 0,
 		     0, &sel);
 	create_dstopt_tmpl(&tmpls[0], &bule->peer_addr, &bule->hoa);
-	return xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT,
+	ret = xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT,
 				   XFRM_POLICY_ALLOW, prio, tmpls, 1);
+	if (ret)
+		XDBG("failed to insert outbound policy\n");
+
+	/* XXX: inbound is missed??? */
+	create_rh_tmpl(&tmpls[0]);
+	set_selector(&bule->hoa, &bule->peer_addr, 0, 0, 0,
+		     0, &sel);
+	ret = xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_IN,
+				   XFRM_POLICY_ALLOW, prio, tmpls, 1);
+	if (ret)
+		XDBG("failed to insert inbound policy\n");
+
+	return ret;
 }
 
 static void parse_acquire(struct nlmsghdr *msg)
