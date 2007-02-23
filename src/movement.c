@@ -1640,7 +1640,7 @@ struct rtnl_handle md_rth;
 static void *md_nl_listen(void *arg)
 {
 	pthread_dbg("thread started");
-	rtnl_ext_listen(&md_rth, process_nlmsg, NULL);
+	rtnl_listen(&md_rth, process_nlmsg, NULL);
 	pthread_exit(NULL);
 }
 

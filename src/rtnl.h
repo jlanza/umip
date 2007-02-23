@@ -21,26 +21,16 @@
 #define IP6_RULE_PRIO_MIP6_BLOCK     1003
 #define IP6_RULE_PRIO_MIP6_FWD       1004
 
-extern int rtnl_ext_open(struct rtnl_handle *rth,
-			 int proto,
-			 unsigned subscriptions);
-
-extern int rtnl_ext_listen(struct rtnl_handle *, 
-			   int (*handler)(struct sockaddr_nl *,
-					  struct nlmsghdr *n,
-					  void *),
-			   void *jarg);
-
 static inline int rtnl_route_open(struct rtnl_handle *rth, 
 				  unsigned subscriptions)
 {
-	return rtnl_ext_open(rth, NETLINK_ROUTE, subscriptions);
+	return rtnl_open_byproto(rth, subscriptions, NETLINK_ROUTE);
 }
 
 static inline int rtnl_xfrm_open(struct rtnl_handle *rth,
 				 unsigned subscriptions)
 {
-	return rtnl_ext_open(rth, NETLINK_XFRM, subscriptions);
+	return rtnl_open_byproto(rth, subscriptions, NETLINK_XFRM);
 }
 
 int rtnl_do(int proto, struct nlmsghdr *sn, struct nlmsghdr *rn);
@@ -91,9 +81,7 @@ int rule_del(const char *iface, uint8_t table,
 	     const struct in6_addr *src, int src_plen,
 	     const struct in6_addr *dst, int dst_plen);
 
-int rtnl_iterate(int proto, int type,
-	int (*func)(struct sockaddr_nl *who, struct nlmsghdr *n, void *arg),
-	void *extarg);
+int rtnl_iterate(int proto, int type, rtnl_filter_t func, void *extarg);
 
 /**
  * routes_iterate - apply something to all routes
@@ -104,9 +92,7 @@ int rtnl_iterate(int proto, int type,
  * @func to all of them.  Returns zero on success, negative otherwise.
  **/
 
-static inline int routes_iterate(
-	int (*func)(struct sockaddr_nl *who, struct nlmsghdr *n, void *arg),
-	void *extarg)
+static inline int routes_iterate(rtnl_filter_t func, void *extarg)
 {
 	return rtnl_iterate(NETLINK_ROUTE, RTM_GETROUTE, func, extarg);
 }
@@ -119,9 +105,7 @@ static inline int routes_iterate(
  * Retrieves all addresses assigned to the node and applies function
  * @func to all of them.  Returns zero on success, negative otherwise.
  **/
-static inline int addrs_iterate(
-	int (*func)(struct sockaddr_nl *who, struct nlmsghdr *n, void *arg),
-	void *extarg)
+static inline int addrs_iterate(rtnl_filter_t func, void *extarg)
 {
 	return rtnl_iterate(NETLINK_ROUTE, RTM_GETADDR, func, extarg);
 }
@@ -134,9 +118,7 @@ static inline int addrs_iterate(
  * Retrieves all IPv6 capable interfaces to the node and applies function
  * @func to all of them.  Returns zero on success, negative otherwise.
  **/
-static inline int inet6_ifaces_iterate(
-	int (*func)(struct sockaddr_nl *who, struct nlmsghdr *n, void *arg),
-	void *extarg)
+static inline int inet6_ifaces_iterate(rtnl_filter_t func, void *extarg)
 {
 	return rtnl_iterate(NETLINK_ROUTE, RTM_GETLINK, func, extarg);
 }

@@ -267,9 +267,9 @@ long xfrm_last_used(const struct in6_addr *daddr,
 		    const struct in6_addr *saddr, int proto,
 		    const struct timespec *now)
 {
-	uint8_t sbuf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_id)) +
-		     RTA_LENGTH(sizeof(xfrm_address_t))];
-	uint8_t rbuf[384];
+	uint8_t sbuf[NLMSG_SPACE(sizeof(struct xfrm_usersa_id)) +
+		     RTA_SPACE(sizeof(xfrm_address_t))];
+	uint8_t rbuf[1024];
 	struct nlmsghdr *sn, *rn;
 	struct xfrm_usersa_id *sa_id;
 	struct xfrm_usersa_info *sa;
@@ -346,10 +346,10 @@ static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel,
 			   int update, int dir, int action, int priority,
 			   struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
-	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_userpolicy_info))
-		    + RTA_LENGTH(sizeof(struct xfrm_userpolicy_type))
-		    + RTA_LENGTH(sizeof(struct xfrm_user_tmpl) 
-				 * MIPV6_MAX_TMPLS)];
+	uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_userpolicy_info))
+		    + RTA_SPACE(sizeof(struct xfrm_userpolicy_type))
+		    + RTA_SPACE(sizeof(struct xfrm_user_tmpl)
+				* MIPV6_MAX_TMPLS)];
 	struct nlmsghdr *n;
 	struct xfrm_userpolicy_info *pol;
 	struct xfrm_userpolicy_type ptype;
@@ -406,9 +406,8 @@ static int xfrm_mip_policy_add(const struct xfrm_selector *sel,
 
 static int xfrm_policy_del(uint8_t type, const struct xfrm_selector *sel, int dir)
 {
-	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_userpolicy_id))
-		    + RTA_LENGTH(sizeof(struct xfrm_userpolicy_type))
-		];
+	uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_userpolicy_id))
+		    + RTA_SPACE(sizeof(struct xfrm_userpolicy_type))];
 	struct nlmsghdr *n;
 	struct xfrm_userpolicy_id *pol_id;
 	struct xfrm_userpolicy_type ptype;
@@ -447,8 +446,8 @@ static int xfrm_state_add(const struct xfrm_selector *sel,
 			  int proto, const struct in6_addr *coa,
 			  int update, uint8_t flags)
 {
-	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_info)) 
-		    + RTA_LENGTH(sizeof(struct in6_addr))];
+	uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_usersa_info))
+		    + RTA_SPACE(sizeof(struct in6_addr))];
 	struct nlmsghdr *n;
 	struct xfrm_usersa_info *sa;
 	int err;
@@ -484,8 +483,8 @@ static int xfrm_state_add(const struct xfrm_selector *sel,
 
 static int xfrm_state_del(int proto, const struct xfrm_selector *sel)
 {
-	uint8_t buf[NLMSG_LENGTH(sizeof(struct xfrm_usersa_id)) +
-		    RTA_LENGTH(sizeof(xfrm_address_t))];
+	uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_usersa_id)) +
+		    RTA_SPACE(sizeof(xfrm_address_t))];
 	struct nlmsghdr *n;
 	struct xfrm_usersa_id *sa_id;
 	int err;
@@ -1808,7 +1807,7 @@ static int parse_report(struct nlmsghdr *msg)
 	return 0;
 }
 
-static int xfrm_rcv(struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+static int xfrm_rcv(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 {
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	switch (n->nlmsg_type) {
@@ -1830,7 +1829,7 @@ struct rtnl_handle xfrm_rth;
 static void *xfrm_listen(void *dummy)
 {
 	pthread_dbg("thread started");
-	rtnl_ext_listen(&xfrm_rth, xfrm_rcv, NULL);
+	rtnl_listen(&xfrm_rth, xfrm_rcv, NULL);
 	pthread_exit(NULL);
 }
 

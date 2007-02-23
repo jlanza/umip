@@ -198,7 +198,7 @@ struct ha_interface *ha_get_if_by_anycast(const struct in6_addr *anycast,
 	return NULL;
 }
 
-static int ha_if_addr_setup(struct sockaddr_nl *who,
+static int ha_if_addr_setup(const struct sockaddr_nl *who,
 			    struct nlmsghdr *n,
 			    void *arg)
 {

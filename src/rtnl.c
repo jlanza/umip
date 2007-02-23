@@ -50,108 +50,11 @@
 #define RTDBG(...) 
 #endif /* RTDBG */
 
-int rtnl_ext_open(struct rtnl_handle *rth, int proto, unsigned subscriptions)
-{
-	socklen_t addr_len;
-
-	memset(rth, 0, sizeof(rth));
-
-	rth->fd = socket(AF_NETLINK, SOCK_RAW, proto);
-	if (rth->fd < 0) {
-		syslog(LOG_ERR,
-		       "Unable to open netlink socket! "
-		       "Do you have root permissions?");
-		return -1;
-	}
-
-	memset(&rth->local, 0, sizeof(rth->local));
-	rth->local.nl_family = AF_NETLINK;
-	rth->local.nl_groups = subscriptions;
-
-	if (bind(rth->fd, (struct sockaddr*)&rth->local, sizeof(rth->local)) < 0) {
-		return -1;
-	}
-	addr_len = sizeof(rth->local);
-	if (getsockname(rth->fd, (struct sockaddr*)&rth->local, &addr_len) < 0) {
-		return -1;
-	}
-	if (addr_len != sizeof(rth->local)) {
-		return -1;
-	}
-	if (rth->local.nl_family != AF_NETLINK) {
-		return -1;
-	}
-	rth->seq = time(NULL);
-	return 0;
-}
-
-int rtnl_ext_listen(struct rtnl_handle *rtnl, 
-		    int (*handler)(struct sockaddr_nl *,
-				   struct nlmsghdr *n,
-				   void *),
-		    void *jarg)
-{
-	int status;
-	struct nlmsghdr *h;
-	struct sockaddr_nl nladdr;
-	struct iovec iov;
-	char buf[1024];
-	struct msghdr msg;
-
-	msg.msg_name = (void*)&nladdr;
-	msg.msg_namelen = sizeof(nladdr);
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-	msg.msg_control = NULL;
-	msg.msg_controllen = 0;
-	msg.msg_flags = 0;
-
-	memset(&nladdr, 0, sizeof(nladdr));
-	nladdr.nl_family = AF_NETLINK;
-	nladdr.nl_pid = 0;
-	nladdr.nl_groups = 0;
-
-
-	iov.iov_base = buf;
-
-	while (1) {
-		iov.iov_len = sizeof(buf);
-		status = recvmsg(rtnl->fd, &msg, 0);
-
-		if (status < 0) {
-			if (errno == EBADF)
-				return -1;
-			continue;
-		}
-		if (status == 0)
-			return 0;
-
-		if (msg.msg_namelen != sizeof(nladdr))
-			continue;
-
-		for (h = (struct nlmsghdr*)buf; status >= sizeof(*h); ) {
-			int err;
-			int len = h->nlmsg_len;
-			int l = len - sizeof(*h);
-
-			if (l < 0 || len > status)
-				break;
-
-			err = handler(&nladdr, h, jarg);
-			if (err < 0)
-				break;
-
-			status -= NLMSG_ALIGN(len);
-			h = (struct nlmsghdr*)((char*)h + NLMSG_ALIGN(len));
-		}
-	}
-}
-
 int rtnl_do(int proto, struct nlmsghdr *sn, struct nlmsghdr *rn)
 {
 	struct rtnl_handle rth;
 	int err;
-	if (rtnl_ext_open(&rth, proto, 0) < 0) {
+	if (rtnl_open_byproto(&rth, 0, proto) < 0) {
 		dbg("huh?\n");
 		return -1;
 	}
@@ -475,13 +378,11 @@ int rule_del(const char *iface, uint8_t table,
 			src, src_plen, dst, dst_plen);
 }
 
-int rtnl_iterate(int proto, int type,
-	int (*func)(struct sockaddr_nl *who, struct nlmsghdr *n, void *arg),
-	void *extarg)
+int rtnl_iterate(int proto, int type, rtnl_filter_t func, void *extarg)
 {
 	struct rtnl_handle rth;
 
-	if (rtnl_ext_open(&rth, proto, 0) < 0)
+	if (rtnl_open_byproto(&rth, 0, proto) < 0)
 		return -1;
 
 	if (rtnl_wilddump_request(&rth, AF_INET6, type) < 0) {
