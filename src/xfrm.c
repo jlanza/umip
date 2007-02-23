@@ -1143,13 +1143,13 @@ int mn_ro_pol_add(struct home_addr_info *hai, int ifindex, int changed)
 		XDBG("Adding default RO triggering policies for all Correspondent Nodes\n");
 		create_trig_dstopt_tmpl(&otmpl, &in6addr_any, &hai->hoa.addr);
 		set_selector(&in6addr_any, &hai->hoa.addr, 0,
-			     0, 0, ifindex, &sel);
+			     0, 0, 0, &sel);
 		if (xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_OUT,
 					XFRM_POLICY_ALLOW,
 					MIP6_PRIO_RO_TRIG_ANY, &otmpl, 1))
 			return -1;
 		set_selector(&hai->hoa.addr, &in6addr_any,
-			     0, 0, 0, ifindex, &sel);
+			     0, 0, 0, 0, &sel);
 		if (xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_IN,
 					XFRM_POLICY_ALLOW,
 					MIP6_PRIO_RO_TRIG_ANY, &itmpl, 1))
@@ -1697,7 +1697,7 @@ int xfrm_post_ba_mod_bule(struct bulentry *bule)
 	prio = (bule->flags & IP6_MH_BU_HOME ?
 		MIP6_PRIO_HOME_DATA : MIP6_PRIO_RO_BULE_DATA);
 	set_selector(&bule->peer_addr, &bule->hoa, 0, 0, 0,
-		     bule->home->if_tunnel, &sel);
+		     0, &sel);
 	create_dstopt_tmpl(&tmpls[0], &bule->peer_addr, &bule->hoa);
 	return xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT,
 				   XFRM_POLICY_ALLOW, prio, tmpls, 1);

@@ -2185,7 +2185,7 @@ void mn_start_ro(struct in6_addr *cn, struct in6_addr *hoa, int iif)
 	pthread_rwlock_wrlock(&mn_lock);
 
 	hai = mn_get_home_addr(hoa);
-	if (!hai || hai->at_home || iif != hai->if_tunnel) {
+	if (!hai || hai->at_home) {
 		pthread_rwlock_unlock(&mn_lock);
 		return;
 	}
