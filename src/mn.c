@@ -1765,7 +1765,8 @@ static int mn_addr_do_dad(int fd, struct home_addr_info *hai,
 				MDBG("DAD succeeded!\n");
 				MDBG("address = %x:%x:%x:%x:%x:%x:%x:%x\n",
 				     NIP6ADDR(addr));
-				mn_block_rule_del(hai);
+				if (!IN6_IS_ADDR_LINKLOCAL(addr) && hai)
+					mn_block_rule_del(hai);
 				return 0;
 			}
 		} else {
