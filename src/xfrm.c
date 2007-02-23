@@ -1096,16 +1096,9 @@ int mn_ro_pol_add(struct home_addr_info *hai, int ifindex, int changed)
 
 	if (!conf.DoRouteOptimizationMN)
 		return 0;
-	/* we don't use any RO triggering policy when TunnelPayload IPsec
-	   tunnel is used */
-	if (conf.UseMnHaIPsec &&
-	    ipsec_policy_entry_check(&hai->ha_addr,
-				     &hai->hoa.addr, IPSEC_F_TNL_ANY)) {
-		return 0;
-	}
 	if (changed)
 		bul_iterate(&hai->bul, mn_bule_ro_pol_add, &ifindex);
-	else 
+	else
 		bcache_iterate(mn_bce_ro_pol_add, hai);
 
 	create_trig_rh_tmpl(&itmpl);
@@ -1164,6 +1157,13 @@ static void _mn_bule_ro_pol_del(struct bulentry *e, int iif)
 	struct xfrm_selector sel;
 	set_selector(&e->peer_addr, &e->hoa, 0, 0, 0, iif, &sel);
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
+
+	/*
+	 * XXX: Trying to delete RO policy which is added by
+	 * xfrm_post_ba_mod_bule()
+	 */
+	set_selector(&e->peer_addr, &e->hoa, 0, 0, 0, 0, &sel);
+	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
 }
 
 static int mn_bule_ro_pol_del(void *vbule, void *viif)
@@ -1212,10 +1212,10 @@ void mn_ro_pol_del(struct home_addr_info *hai, int ifindex, int changed)
 	if (!wildcard) {
 		XDBG("Deleting default RO triggering policies for all Correspondent Nodes\n");
 		set_selector(&in6addr_any, &hai->hoa.addr, 0,
-			     0, 0, ifindex, &sel);
+			     0, 0, 0, &sel);
 		xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
 		set_selector(&hai->hoa.addr, &in6addr_any,
-			     0, 0, 0, ifindex, &sel);
+			     0, 0, 0, 0, &sel);
 		xfrm_mip_policy_del(&sel, XFRM_POLICY_IN);
 	}
 }
@@ -1337,6 +1337,7 @@ static int _xfrm_add_bule_bce(const struct in6_addr *our_addr,
 {
 	struct xfrm_user_tmpl tmpls[2];
 	struct xfrm_selector sel;
+	replace = 1;
 	create_rh_tmpl(&tmpls[0]);
 	create_dstopt_tmpl(&tmpls[1], peer_addr, our_addr);
 	set_selector(peer_addr, our_addr, 0, 0, 0, 0, &sel);
@@ -1404,8 +1405,6 @@ int xfrm_add_bce(const struct in6_addr *our_addr,
 		if (ipsec_policy_apply(our_addr, peer_addr,
 				       _ha_mn_ipsec_pol_mod, NULL) < 0)
 			return -1;
-		if (ipsec_policy_entry_check(our_addr, peer_addr, IPSEC_F_ANY))
-			return 0;
 	}
 	_xfrm_add_bce(our_addr, peer_addr, replace);
 	return 0;
@@ -1533,6 +1532,7 @@ static int _xfrm_bce_reset(struct bulentry *bule)
 static int _xfrm_del_bule_data(struct bulentry *bule)
 {
 	struct xfrm_selector sel;
+	int prio;
 
 	set_selector(&bule->peer_addr, &bule->hoa, 0, 0, 0, 0, &sel);
 	xfrm_state_del(IPPROTO_DSTOPTS,  &sel);
@@ -1553,27 +1553,28 @@ static int _xfrm_del_bule_data(struct bulentry *bule)
 	if (bule->flags & IP6_MH_BU_HOME && conf.UseMnHaIPsec) {
 		ipsec_policy_apply(&bule->home->ha_addr, &bule->hoa,
 				   _mn_ha_ipsec_pol_mod, NULL);
-		bule->xfrm_state = 0;
-	} else {
- 		/* MN - CN/HA case, BU out */
-		int prio = (bule->flags & IP6_MH_BU_HOME ?
-			    MIP6_PRIO_HOME_SIG : MIP6_PRIO_RO_SIG);
-		if (bule->flags & IP6_MH_BU_ACK) {
-			set_selector(&bule->hoa, &bule->peer_addr, IPPROTO_MH,
-				     IP6_MH_TYPE_BACK, 0, 0, &sel);
-			if (xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_IN,
-						XFRM_POLICY_ALLOW, prio, NULL, 0))
-				return -1;
-		}
-		set_selector(&bule->peer_addr, &bule->hoa, IPPROTO_MH,
-			     IP6_MH_TYPE_BU, 0, 0, &sel);
-		if (xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT,
+	}
+	/* MN - CN/HA case, BU out */
+	prio = (bule->flags & IP6_MH_BU_HOME ?
+		MIP6_PRIO_HOME_SIG : MIP6_PRIO_RO_SIG);
+	if (bule->flags & IP6_MH_BU_ACK) {
+		set_selector(&bule->hoa, &bule->peer_addr, IPPROTO_MH,
+			     IP6_MH_TYPE_BACK, 0, 0, &sel);
+		if (xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_IN,
 					XFRM_POLICY_ALLOW, prio, NULL, 0))
 			return -1;
-		bule->xfrm_state &= ~BUL_XFRM_STATE_DATA;
 	}
-	return 0;
+	set_selector(&bule->peer_addr, &bule->hoa, IPPROTO_MH,
+		     IP6_MH_TYPE_BU, 0, 0, &sel);
+	if (xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT,
+				XFRM_POLICY_ALLOW, prio, NULL, 0))
+		return -1;
 
+	if (bule->flags & IP6_MH_BU_HOME && conf.UseMnHaIPsec)
+		bule->xfrm_state = 0;
+	else
+		bule->xfrm_state &= ~BUL_XFRM_STATE_DATA;
+	return 0;
 }
 
 static void _xfrm_del_bule_sig(struct bulentry *bule)
@@ -1950,15 +1951,9 @@ int mn_ipsec_recv_bu_tnl_pol_add(struct bulentry *bule, int ifindex,
 	struct xfrm_user_tmpl tmpls[MIPV6_MAX_TMPLS];
 	int ti = 0;
 
-	set_selector(&bule->hoa, &in6addr_any, IPPROTO_MH, 
+	set_selector(&bule->hoa, &in6addr_any, IPPROTO_MH,
 		     IP6_MH_TYPE_BU, 0, ifindex, &sel);
 
-	create_dstopt_tmpl(&tmpls[ti++], &in6addr_any, &in6addr_any);
-	if (xfrm_ipsec_policy_add(&sel, 1, XFRM_POLICY_IN, e->action,
-				  MIP6_PRIO_RO_SIG_IPSEC, tmpls, ti))
-		return -1;
-
-	ti = 0;
 	if (ipsec_use_ipcomp(e))
 		create_ipsec_tmpl(&tmpls[ti++], IPPROTO_COMP, XFRM_MODE_TUNNEL,
 				  &bule->hoa, &bule->home->ha_addr,
@@ -1982,7 +1977,6 @@ void mn_ipsec_recv_bu_tnl_pol_del(struct bulentry *bule, int ifindex,
 	memset(&sel, 0, sizeof(sel));
 	set_selector(&bule->hoa, &in6addr_any, IPPROTO_MH,
 		     IP6_MH_TYPE_BU, 0, ifindex, &sel);
-	xfrm_mip_policy_del(&sel, XFRM_POLICY_IN);
 	xfrm_ipsec_policy_del(&sel, XFRM_POLICY_IN);
 }
 
