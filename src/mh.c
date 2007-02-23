@@ -553,6 +553,17 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 	mh = (struct ip6_mh *)iov[0].iov_base;
 	mh->ip6mh_hdrlen = (mh_length(iov, iov_count) >> 3) - 1;
 
+	/*
+	 * We use MH out policy for all address. Then we should update it
+	 * to refresh its bundle in kernel to be used with correct
+	 * route, IPsec SA and neighbor cache entry for the destination.
+	 * IKE daemon does the same thing for rekeying process.
+	 */
+        if (xfrm_cn_policy_mh_out_touch(1) < 0) {
+                MDBG("MH out policy touch failed: BA for "
+                     "%x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(addrs->dst));
+        }
+
 	MDBG("sending MH type %d\n"
 	     "from %x:%x:%x:%x:%x:%x:%x:%x\n"
 	     "to %x:%x:%x:%x:%x:%x:%x:%x\n",

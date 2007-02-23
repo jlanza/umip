@@ -904,6 +904,19 @@ static void xfrm_ha_cleanup(void)
 		ha_mn_ipsec_cleanup();
 }
 
+int xfrm_cn_policy_mh_out_touch(int update)
+{
+	struct xfrm_selector sel;
+
+	/* policy to not add rth type 2 to MH msgs */
+	set_selector(&in6addr_any, &in6addr_any, IPPROTO_MH, 0, 0, 0, &sel);
+	if (xfrm_mip_policy_add(&sel, update, XFRM_POLICY_OUT,
+				XFRM_POLICY_ALLOW, MIP6_PRIO_NO_RO_SIG_ANY,
+				NULL, 0) < 0)
+		return -1;
+	return 0;
+}
+
 /* Create or clean up initial xfrm policies and states for CN */
 static int xfrm_cn_init(void)
 {
@@ -921,10 +934,7 @@ static int xfrm_cn_init(void)
 			   &in6addr_any, 0, XFRM_STATE_WILDRECV) < 0)
 		return -1;
 
-	/* policy to not add rth type 2 to MH msgs */
-	set_selector(&in6addr_any, &in6addr_any, IPPROTO_MH, 0, 0, 0, &sel);
-	if (xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_OUT, XFRM_POLICY_ALLOW,
-				MIP6_PRIO_NO_RO_SIG_ANY, NULL, 0) < 0)
+	if (xfrm_cn_policy_mh_out_touch(0) < 0)
 		return -1;
 
 	/* Let Neighbor Solicitation messages bypass bindings */

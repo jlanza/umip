@@ -75,6 +75,8 @@ int mn_ipsec_recv_bu_tnl_pol_add(struct bulentry *bule, int ifindex,
 void mn_ipsec_recv_bu_tnl_pol_del(struct bulentry *bule, int ifindex,
 				  struct ipsec_policy_entry *e);
 
+int xfrm_cn_policy_mh_out_touch(int update);
+
 int cn_wildrecv_bu_pol_add(void);
 void cn_wildrecv_bu_pol_del(void);
 
