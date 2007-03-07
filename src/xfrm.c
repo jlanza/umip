@@ -218,7 +218,7 @@ static void set_selector(const struct in6_addr *daddr,
 
 	sel->family = AF_INET6;
 	sel->user = getuid();
-	sel->ifindex = ifindex;
+	sel->ifindex = 0;
 	sel->proto = proto;
 	switch (proto) {
 	case 0: /* Any */

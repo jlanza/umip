@@ -101,7 +101,7 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 				0 : 128;
 	sp->sel.prefixlen_d = IN6_ARE_ADDR_EQUAL(in6_dst, &in6addr_any) ?
 				0 : 128;
-	sp->sel.ifindex = ifindex;
+	sp->sel.ifindex = 0;
 
 	switch (e->type) {
 	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
