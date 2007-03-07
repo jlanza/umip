@@ -105,20 +105,23 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 
 	switch (e->type) {
 	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
-		sp->priority = MIP6_PRIO_RO_SIG_RR;
 		if (dir == XFRM_POLICY_IN) {
-			if (nodetype == MIP6_ENTITY_MN)
+			if (nodetype == MIP6_ENTITY_MN) {
 				sp->sel.sport = htons(IP6_MH_TYPE_HOT);
-			else if (nodetype == MIP6_ENTITY_HA)
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
 				sp->sel.sport = htons(IP6_MH_TYPE_HOTI);
-			else
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
 				sp->sel.sport = 0;
 		} else if (dir == XFRM_POLICY_OUT) {
-			if (nodetype == MIP6_ENTITY_MN)
+			if (nodetype == MIP6_ENTITY_MN) {
 				sp->sel.sport = htons(IP6_MH_TYPE_HOTI);
-			else if (nodetype == MIP6_ENTITY_HA)
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
 				sp->sel.sport = htons(IP6_MH_TYPE_HOT);
-			else
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
 				sp->sel.sport = 0;
 		} else {
 			sp->sel.sport = 0;
