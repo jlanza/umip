@@ -1158,7 +1158,9 @@ static int vt_cmd_input(const struct vt_handle *vh, char *line, ssize_t len)
 			vt_cmd_dump_candidates(vh, ce, VT_CMD_HELP_LINE_MAX);
 			goto fin;
 		} else {
-			fprintf(vh->vh_stream, "unknown command: \"%s\"\n", p);
+			char buf[VT_PKT_BUFLEN];
+			fprintf(vh->vh_stream, "unknown command: \"%s\"\n",
+				vt_str_space_chop(p, buf, sizeof(buf)));
 			goto fin;
 		}
 	}
