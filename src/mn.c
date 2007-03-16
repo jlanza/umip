@@ -79,6 +79,10 @@
 #define MDBG2(...)
 #endif
 
+#ifndef FIB_RULE_FIND_SADDR
+#define	FIB_RULE_FIND_SADDR	0
+#endif
+
 LIST_HEAD(home_addr_list); 
 
 pthread_rwlock_t mn_lock;
