@@ -1197,12 +1197,14 @@ int mn_ro_pol_add(struct home_addr_info *hai, int ifindex, int changed)
 					XFRM_POLICY_ALLOW,
 					MIP6_PRIO_RO_TRIG_ANY, &otmpl, 1))
 			return -1;
+#if 0  // Disable inboud trigger because of ifindex problem
 		set_selector(&hai->hoa.addr, &in6addr_any,
 			     0, 0, 0, 0, &sel);
 		if (xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_IN,
 					XFRM_POLICY_ALLOW,
 					MIP6_PRIO_RO_TRIG_ANY, &itmpl, 1))
 			return -1;
+#endif
 	}
 
 	return 0;
