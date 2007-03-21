@@ -2271,6 +2271,7 @@ void mn_start_ro(struct in6_addr *cn, struct in6_addr *hoa, int iif)
 
 		if (bul_add(bule) < 0) {
 			bul_delete(bule);
+			pthread_rwlock_unlock(&mn_lock);
 			return;
 		}
 		mn_rr_refresh(bule);
