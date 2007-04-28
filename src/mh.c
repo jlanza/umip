@@ -619,6 +619,10 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 	cmsglen = CMSG_SPACE(sizeof(pinfo));
 	if (addrs->remote_coa != NULL) {
 		rthlen = inet6_rth_space(IPV6_RTHDR_TYPE_2, 1);
+		if (!rthlen) {
+			MDBG("inet6_rth_space error\n");
+			return -1;
+		}
 		cmsglen += CMSG_SPACE(rthlen);
 	}
 	cmsg = malloc(cmsglen);
@@ -658,6 +662,7 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 		rthp = inet6_rth_init(rthp, rthlen, IPV6_RTHDR_TYPE_2, 1);
 		if (rthp == NULL) {
 			free(msg.msg_control);
+			MDBG("inet6_rth_init error\n");
 			return -3;
 		}
 		inet6_rth_add(rthp, addrs->remote_coa);
