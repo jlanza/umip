@@ -10,6 +10,10 @@
    you don't. */
 #undef HAVE_DECL_IFA_F_HOMEADDRESS
 
+/* Define to 1 if you have the declaration of `IPV6_RTHDR_TYPE_2', and to 0 if
+   you don't. */
+#undef HAVE_DECL_IPV6_RTHDR_TYPE_2
+
 /* Define to 1 if you don't have `vprintf' but do have `_doprnt.' */
 #undef HAVE_DOPRNT
 
@@ -250,7 +254,7 @@
    supported. Do not define if restrict is supported directly. */
 #undef restrict
 
-/* Define to `unsigned' if <sys/types.h> does not define. */
+/* Define to `unsigned int' if <sys/types.h> does not define. */
 #undef size_t
 
 /* Define as `fork' if `vfork' does not work. */

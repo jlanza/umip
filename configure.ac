@@ -130,22 +130,34 @@ AC_CACHE_CHECK([whether to enable debug virtual terminal],
 	       [ac_cv_enable_vt], [ac_cv_enable_vt=no])
 AM_CONDITIONAL(ENABLE_VT, test x$enable_vt = xyes)
 
-dnl Check Advanced IPv6 Socket API function availability
-AC_MSG_NOTICE([*** checking for RFC3542: Advanced IPv6 Socket API support])
+dnl Check Advanced IPv6 Socket API destination options header function availability
+AC_MSG_NOTICE([*** checking inet6_opt for RFC3542: Advanced IPv6 Socket API support])
 AC_REPLACE_FUNCS(inet6_opt_find)
-AC_REPLACE_FUNCS(inet6_rth_space)
-AC_REPLACE_FUNCS(inet6_rth_init)
-AC_REPLACE_FUNCS(inet6_rth_add)
-AC_REPLACE_FUNCS(inet6_rth_getaddr)
-AC_REPLACE_FUNCS(inet6_rth_gettype)
+
+dnl Check Advanced IPv6 Socket API routing header function availability
+AC_MSG_NOTICE([*** checking inet6_rth for RFC3542: Advanced IPv6 Socket API support])
+dnl Check Extension to Socket API for MIPv6 availability
+AC_MSG_NOTICE([*** checking RH2 for RFC4584: Extension to Socket API for MIPv6])
+AC_CHECK_DECLS([IPV6_RTHDR_TYPE_2],
+	[AC_REPLACE_FUNCS(inet6_rth_space)
+	 AC_REPLACE_FUNCS(inet6_rth_init)
+	 AC_REPLACE_FUNCS(inet6_rth_add)
+	 AC_REPLACE_FUNCS(inet6_rth_getaddr)
+	 AC_REPLACE_FUNCS(inet6_rth_gettype)],
+	[AC_LIBOBJ(inet6_rth_space)
+	 AC_LIBOBJ(inet6_rth_init)
+	 AC_LIBOBJ(inet6_rth_add)
+	 AC_LIBOBJ(inet6_rth_getaddr)
+	 AC_LIBOBJ(inet6_rth_gettype)],)
+
 dnl Check some functions are really missing so we don't build empty libmissing
 AM_CONDITIONAL(MISSING,
-   test x$ac_cv_func_inet6_opt_find = xno -o \
-	x$ac_cv_func_inet6_rth_space = xno -o \
-	x$ac_cv_func_inet6_rth_init = xno -o \
-	x$ac_cv_func_inet6_rth_add = xno -o \
-	x$ac_cv_func_inet6_rth_getaddr = xno -o \
-	x$ac_cv_func_inet6_rth_gettype = xno)
+   test x$ac_cv_func_inet6_opt_find != xyes -o \
+	x$ac_cv_func_inet6_rth_space != xyes -o \
+	x$ac_cv_func_inet6_rth_init != xyes -o \
+	x$ac_cv_func_inet6_rth_add != xyes -o \
+	x$ac_cv_func_inet6_rth_getaddr != xyes -o \
+	x$ac_cv_func_inet6_rth_gettype != xyes)
 
 AC_MSG_NOTICE([*** checking for Mobile IPv6 support in kernel headers])
 AC_CHECK_DECLS([IFA_F_HOMEADDRESS],,
