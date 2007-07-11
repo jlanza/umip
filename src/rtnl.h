@@ -19,7 +19,8 @@
 #define IP6_RULE_PRIO_MIP6_HOA_OUT   1001
 #define IP6_RULE_PRIO_MIP6_COA_OUT   1002
 #define IP6_RULE_PRIO_MIP6_BLOCK     1003
-#define IP6_RULE_PRIO_MIP6_FWD       1004
+#define IP6_RULE_PRIO_MIP6_BLOCK_HOA 1004
+#define IP6_RULE_PRIO_MIP6_FWD       1005
 
 static inline int rtnl_route_open(struct rtnl_handle *rth, 
 				  unsigned subscriptions)

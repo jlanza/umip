@@ -74,15 +74,11 @@ static pthread_mutex_t iface_lock;
 static pthread_t md_listener;
 
 static int conf_default_autoconf = 1;
-static int conf_default_ra = 1;
 static int conf_default_ra_defrtr = 1;
-static int conf_default_ra_pinfo = 1;
 static int conf_default_rs = 3;
 static int conf_default_rs_ival = 4;
 
 static int conf_autoconf = 1;
-static int conf_ra = 1;
-static int conf_ra_pinfo = 1;
 static int conf_ra_defrtr = 0;
 static int conf_rs = 0;
 
@@ -286,7 +282,7 @@ static void md_expire_router(struct md_inet6_iface *iface,
 
 static void md_block_rule_del(struct md_inet6_iface *iface)
 {
-	rule_del(NULL, 0, IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
+	rule_del(NULL, 0, IP6_RULE_PRIO_MIP6_BLOCK_HOA, RTN_BLACKHOLE,
 		 &in6addr_any, 0, &in6addr_any, 0, 0);
 	rule_del(NULL, RT6_TABLE_MAIN, IP6_RULE_PRIO_MIP6_COA_OUT, RTN_UNICAST,
 		 &in6addr_any, 128, &in6addr_any, 0, 0);
@@ -818,7 +814,7 @@ static int process_neigh(struct nlmsghdr *n, void *arg)
 	return 0;
 }
 
-static int process_nlmsg(struct sockaddr_nl *who,
+static int process_nlmsg(const struct sockaddr_nl *who,
 			 struct nlmsghdr *n, void *arg)
 {
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
@@ -1332,7 +1328,7 @@ static int md_block_rule_add(struct md_inet6_iface *iface)
 	   on CoA to make routing and tunnel end-point updates atomic
 	   during handoff */
 	return rule_add(NULL, 0,
-			IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
+			IP6_RULE_PRIO_MIP6_BLOCK_HOA, RTN_BLACKHOLE,
 			&in6addr_any, 0, &in6addr_any, 0, 0);
 }
 
