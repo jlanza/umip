@@ -129,7 +129,7 @@ static int mn_block_rule_add(struct home_addr_info *hai)
 	if ((ret = rule_add(NULL, 0, IP6_RULE_PRIO_MIP6_BLOCK, RTN_BLACKHOLE,
 		     &hai->hoa.addr, 128, &in6addr_any, 0,
 		     FIB_RULE_FIND_SADDR)) < 0)
-		MDBG("failed to delete blackhole rule.\n");
+		MDBG("failed to add blackhole rule.\n");
 	else
 		hai->home_block |= HOME_ADDR_RULE_BLOCK;
 

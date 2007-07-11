@@ -4,7 +4,7 @@
 #define __PROC_SYS_H__ 1
 
 #define PROC_SYS_IP6_AUTOCONF "/proc/sys/net/ipv6/conf/%s/autoconf"
-#define PROC_SYS_IP6_ACCEPT_RA"/proc/sys/net/ipv6/conf/%s/accept_ra"
+#define PROC_SYS_IP6_ACCEPT_RA "/proc/sys/net/ipv6/conf/%s/accept_ra"
 #define PROC_SYS_IP6_ACCEPT_RA_DEFRTR "/proc/sys/net/ipv6/conf/%s/accept_ra_defrtr"
 #define PROC_SYS_IP6_ACCEPT_RA_PINFO "/proc/sys/net/ipv6/conf/%s/accept_ra_pinfo"
 #define PROC_SYS_IP6_RTR_SOLICITS "/proc/sys/net/ipv6/conf/%s/router_solicitations"
