@@ -684,7 +684,7 @@ static int bcache_vt_dump(void *data, void *arg)
 static int vt_str_to_uint32(const struct vt_handle *vh, const char *str,
 			    uint32_t *val)
 {
-	uint32_t v;
+	long int v;
 	char *ptr = NULL;
 
 	v = strtoul(str, &ptr, 0);
@@ -697,7 +697,7 @@ static int vt_str_to_uint32(const struct vt_handle *vh, const char *str,
 		return -ERANGE;
 	}
 
-	*val = v;
+	*val = (uint32_t)v;
 	return 0;
 }
 
