@@ -1755,6 +1755,8 @@ int xfrm_post_ba_mod_bule(struct bulentry *bule)
 				return -1;
 			}
 			bcache_release_entry(bce);
+			/* return 0: not to overwrite policy (for MN-MN communication) */
+			return 0;
 		}
 	}
 	prio = (bule->flags & IP6_MH_BU_HOME ?
