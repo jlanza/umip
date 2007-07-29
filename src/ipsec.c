@@ -105,7 +105,7 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 
 	switch (e->type) {
 	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
-		if (dir == XFRM_POLICY_IN) {
+		if (dir == XFRM_POLICY_IN || dir == XFRM_POLICY_FWD) {
 			if (nodetype == MIP6_ENTITY_MN) {
 				sp->sel.sport = htons(IP6_MH_TYPE_HOT);
 				sp->sel.sport_mask = ~((__u16)0);
