@@ -1278,9 +1278,11 @@ void mn_ro_pol_del(struct home_addr_info *hai, int ifindex, int changed)
 		set_selector(&in6addr_any, &hai->hoa.addr, 0,
 			     0, 0, 0, &sel);
 		xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
+#if 0  // Disable inboud trigger because of ifindex problem
 		set_selector(&hai->hoa.addr, &in6addr_any,
 			     0, 0, 0, 0, &sel);
 		xfrm_mip_policy_del(&sel, XFRM_POLICY_IN);
+#endif
 	}
 }
 
