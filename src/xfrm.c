@@ -1213,13 +1213,6 @@ int mn_ro_pol_add(struct home_addr_info *hai, int ifindex, int changed)
 static void _mn_bule_ro_pol_del(struct bulentry *e, int iif)
 {
 	struct xfrm_selector sel;
-	set_selector(&e->peer_addr, &e->hoa, 0, 0, 0, iif, &sel);
-	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
-
-	/*
-	 * XXX: Trying to delete RO policy which is added by
-	 * xfrm_post_ba_mod_bule()
-	 */
 	set_selector(&e->peer_addr, &e->hoa, 0, 0, 0, 0, &sel);
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
 
