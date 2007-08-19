@@ -1500,8 +1500,6 @@ void xfrm_del_bce(const struct in6_addr *our_addr,
 		  const struct in6_addr *peer_addr)
 {
 	struct xfrm_selector sel;
-	struct home_addr_info *hai;
-	struct bulentry *e;
 	set_selector(peer_addr, our_addr, 0, 0, 0, 0, &sel);
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
 	xfrm_state_del(IPPROTO_ROUTING,  &sel);
@@ -1509,16 +1507,19 @@ void xfrm_del_bce(const struct in6_addr *our_addr,
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_IN);
 	xfrm_state_del(IPPROTO_DSTOPTS, &sel);
 
-	/* for MN-MN communications, checking BUL to insert RO policy */
-	pthread_rwlock_rdlock(&mn_lock);
-	if ((hai = mn_get_home_addr(our_addr)) != NULL) {
-		if ((e = bul_get(hai, NULL, peer_addr)) != NULL) {
-			if (e->type == BUL_ENTRY)
-			    _xfrm_add_bule_bce(our_addr, peer_addr, 0);
+	if (is_mn()){
+		struct home_addr_info *hai;
+		struct bulentry *e;
+		/* for MN-MN communications, checking BUL to insert RO policy */
+		pthread_rwlock_rdlock(&mn_lock);
+		if ((hai = mn_get_home_addr(our_addr)) != NULL) {
+			if ((e = bul_get(hai, NULL, peer_addr)) != NULL) {
+				if (e->type == BUL_ENTRY)
+			    	_xfrm_add_bule_bce(our_addr, peer_addr, 0);
+			}
 		}
+		pthread_rwlock_unlock(&mn_lock);
 	}
-	pthread_rwlock_unlock(&mn_lock);
-
 }
 
 /** 
