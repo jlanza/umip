@@ -703,6 +703,14 @@ static int xfrm_mn_init(void)
 	if (conf.UseMnHaIPsec && mn_ha_ipsec_init() < 0)
 		return -1;
 
+	/* policy for sending BE */
+	/* The priolity is higher than the block policy so that MN can send BE during registration */
+	set_selector(&in6addr_any, &in6addr_any,
+		     IPPROTO_MH, IP6_MH_TYPE_BERROR, 0, 0, &sel);
+	if (xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_OUT, XFRM_POLICY_ALLOW,
+				MIP6_PRIO_HOME_SIG_ANY, NULL, 0) < 0)
+		return -1;
+
 	XDBG2("Adding RTHdr type 2 handling 2 state for MN\n");
 	set_selector(&in6addr_any, &in6addr_any, 0, 0, 0, 0, &sel);
 	create_rh_tmpl(&tmpl);
@@ -789,6 +797,13 @@ static inline void mn_ha_ipsec_cleanup(void)
 static void xfrm_mn_cleanup(void)
 {
 	struct xfrm_selector sel;
+
+	/* the policy for sending BE */
+	set_selector(&in6addr_any, &in6addr_any,
+		     IPPROTO_MH, IP6_MH_TYPE_BERROR, 0, 0, &sel);
+	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
+
+
 	XDBG("Deleting policies and states for MN\n");
 	XDBG2("Deleting RTHdr type 2 handling 2 state for MN\n");
 	set_selector(&in6addr_any, &in6addr_any, 0, 0, 0, 0, &sel);
