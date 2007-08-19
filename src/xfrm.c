@@ -1697,6 +1697,7 @@ int xfrm_pre_bu_add_bule(struct bulentry *bule)
 	int rsig = bule->xfrm_state & BUL_XFRM_STATE_SIG;
 	int rdata = bule->xfrm_state & BUL_XFRM_STATE_DATA;
 	int prio;
+	int exist = 0;
 
 	if (bule->flags & IP6_MH_BU_HOME) {
 		struct home_addr_info *hai = bule->home;
@@ -1742,9 +1743,10 @@ int xfrm_pre_bu_add_bule(struct bulentry *bule)
 				return -1;
 			}
 			bcache_release_entry(bce);
+			exist = 1;
 		}
 	}
-	if (_mn_bule_ro_pol_add(bule, bule->home->if_tunnel, rdata))
+	if(!exist &&_mn_bule_ro_pol_add(bule, bule->home->if_tunnel, rdata))
 		return -1;
 	set_selector(&bule->peer_addr, &bule->hoa, 0, 0, 0, 0, &sel);
 	/* XXX: acquired state is already inserted */
