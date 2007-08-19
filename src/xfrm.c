@@ -999,11 +999,15 @@ static int xfrm_cn_init(void)
 				MIP6_PRIO_NO_RO_SIG_ANY, NULL, 0) < 0)
 		return -1;
 
-	/* Let Neighbor Advertisement messages bypass bindings */
+	/*
+	 * Let Neighbor Advertisement messages bypass bindings 
+	 * This policy is high priority(priory 3) not to block 
+	 * by the BlockPolicy during registration.
+	 */
 	set_selector(&in6addr_any, &in6addr_any,
 		     IPPROTO_ICMPV6, ND_NEIGHBOR_ADVERT, 0, 0, &sel);
 	if (xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_OUT, XFRM_POLICY_ALLOW,
-				MIP6_PRIO_NO_RO_SIG_ANY, NULL, 0) < 0)
+				MIP6_PRIO_HOME_SIG_ANY, NULL, 0) < 0)
 		return -1;
 
 	/* Let ICMPv6 error messages bypass bindings */
@@ -1964,16 +1968,7 @@ int xfrm_block_link(struct home_addr_info *hai)
 	struct xfrm_selector sel;
 	hai->home_block |= HOME_LINK_BLOCK;
 	hai->if_block = hai->hoa.iif;
-	/*
-	 * allow MN to send NA messages to HA while returning home
-	 * such policy is already installed in xfrm_cn_init at startup,
-	 * so we update it (update field to 1).
-	 * Reported by Romain KUNTZ <kuntz@clarinet.u-strasbg.fr>.
-	 */
-	set_selector(&in6addr_any, &in6addr_any, IPPROTO_ICMPV6,
-		     ND_NEIGHBOR_ADVERT, 0, hai->if_block, &sel);
-	if ((ret = xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT, XFRM_POLICY_ALLOW, MIP6_PRIO_HOME_SIG_ANY, NULL, 0)))
-		return ret;
+
 	/* block any packets from HoA to the CN */
 	set_selector(&in6addr_any, &in6addr_any, 0, 0, 0, hai->if_block, &sel);
 	if ((ret = xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_OUT,
@@ -1988,16 +1983,7 @@ void xfrm_unblock_link(struct home_addr_info *hai)
 	struct xfrm_selector sel;
 	set_selector(&in6addr_any, &in6addr_any, 0, 0, 0, hai->if_block, &sel);
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
-	/*
-	 * instead of deleting the policy, update it to its previous state (
-	 * the one installed in xfrm_cn_init).
-	 * Reported by Romain KUNTZ <kuntz@clarinet.u-strasbg.fr>.
-	 */
-	set_selector(&in6addr_any, &in6addr_any,
-		     IPPROTO_ICMPV6, ND_NEIGHBOR_ADVERT, 0, 0, &sel);
-	if (xfrm_mip_policy_add(&sel, 1, XFRM_POLICY_OUT, XFRM_POLICY_ALLOW,
-				MIP6_PRIO_NO_RO_SIG_ANY, NULL, 0) < 0)
-		XDBG("Could not update NA policy\n");
+
 	hai->if_block = 0;
 	hai->home_block &= ~HOME_LINK_BLOCK;
 }
