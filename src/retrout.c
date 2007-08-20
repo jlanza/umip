@@ -785,13 +785,6 @@ static void mn_recv_hot(const struct ip6_mh *mh, ssize_t len,
 	memcpy(rre_ho->kgen_token, keygen, sizeof(rre_ho->kgen_token));
 	rre_ho->index = index;
 
-	if (!bule->do_send_bu) {
-		/* This happens when we automatically refresh home
-		 * keygen token while binding still in use */
-		pthread_rwlock_unlock(&mn_lock);
-		return;
-	}
-
 	if (bule->dereg) {
 		/* Dereg BUL entry waiting for RR_READY */
 		RRDBG("Got HoT\n");
