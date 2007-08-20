@@ -1472,11 +1472,25 @@ int xfrm_add_bce(const struct in6_addr *our_addr,
 
 	/* Create policy for outbound RO data traffic */
 	set_selector(peer_addr, our_addr, 0, 0, 0, 0, &sel);
-	if (xfrm_state_add(&sel, IPPROTO_ROUTING, coa, replace, 0))
-		return -1;
+	if (xfrm_state_add(&sel, IPPROTO_ROUTING, coa, replace, 0)){
+		/* 
+		 * WORKAROUND 
+		 * In some cases, MN fail to add it because of the state
+		 * inserted by kernel when notifying aquire. So,update it.
+		 */
+		if (xfrm_state_add(&sel, IPPROTO_ROUTING, coa, 1, 0))
+			return -1;
+	}
 	set_selector(our_addr, peer_addr, 0, 0, 0, 0, &sel);
-	if (xfrm_state_add(&sel, IPPROTO_DSTOPTS, coa, replace, 0))
+	if (xfrm_state_add(&sel, IPPROTO_DSTOPTS, coa, replace, 0)){
+		/* 
+		 * WORKAROUND 
+		 * In some cases, MN fail to add it because of the state
+		 * inserted by kernel when notifying aquire. So,update it.
+		 */
+		if (xfrm_state_add(&sel, IPPROTO_DSTOPTS, coa, 1, 0))
 		return -1;
+	}
 	if (is_mn() && !xfrm_bule_bce_update(our_addr, peer_addr, replace))
 		return 0;
 	if (is_ha() && conf.UseMnHaIPsec) {
