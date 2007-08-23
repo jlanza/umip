@@ -703,6 +703,8 @@ static void mn_recv_cot(const struct ip6_mh *mh, ssize_t len,
 			continue;
 		}
 
+		bule->rr.co_ni = index;
+
 		if (!bule->do_send_bu) {
 			/* This happens when we automatically refresh home
 			 * keygen token while binding still in use */
@@ -717,7 +719,6 @@ static void mn_recv_cot(const struct ip6_mh *mh, ssize_t len,
 		RRDBG("Got CoT and found RR entry for home address\n");
 		bule->rr.state = RR_READY;
 		bule->rr.ho_ni = rre_ho->index;
-		bule->rr.co_ni = index;
 		rr_mn_calc_Kbm(rre_ho->kgen_token, keygen, bule->Kbm);
 		mn_send_cn_bu(bule);
 	}
@@ -784,13 +785,13 @@ static void mn_recv_hot(const struct ip6_mh *mh, ssize_t len,
 	rre_ho->resend_count = 0;
 	memcpy(rre_ho->kgen_token, keygen, sizeof(rre_ho->kgen_token));
 	rre_ho->index = index;
+	bule->rr.ho_ni = index;
 
 	if (bule->dereg) {
 		/* Dereg BUL entry waiting for RR_READY */
 		RRDBG("Got HoT\n");
 		if (bule->do_send_bu) {
 			bule->rr.state = RR_READY;
-			bule->rr.ho_ni = index;
 			bule->rr.co_ni = 0;
 			rr_mn_calc_Kbm(keygen, NULL, bule->Kbm);
 			mn_send_cn_bu(bule);
@@ -803,7 +804,6 @@ static void mn_recv_hot(const struct ip6_mh *mh, ssize_t len,
 			RRDBG("Got HoT and found RR entry for care-of address\n");
 			/* Foreign Reg BU case */
 			bule->rr.state = RR_READY;
-			bule->rr.ho_ni = index;
 			bule->rr.co_ni = rre_co->index;
 			rr_mn_calc_Kbm(keygen, rre_co->kgen_token, bule->Kbm);
 			mn_send_cn_bu(bule);
