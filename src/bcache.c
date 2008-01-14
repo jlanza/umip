@@ -138,11 +138,11 @@ struct bcentry *bcache_alloc(int type)
 	if (tmp == NULL)
 		return NULL;
 
+	memset(tmp, 0, sizeof(*tmp));
 	if (pthread_rwlock_init(&tmp->lock, NULL)) {
 		free(tmp);
 		return NULL;
 	}
-	memset(tmp, 0, sizeof(*tmp));
 	INIT_LIST_HEAD(&tmp->tqe.list);
 	return tmp;
 }
