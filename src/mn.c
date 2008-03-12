@@ -965,7 +965,7 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 	struct ip6_mh_binding_ack *ba;
 	struct mh_options mh_opts;
 	struct bulentry *bule;
-	struct timespec now, ba_lifetime, br_adv;
+	struct timespec now, ba_lifetime, br_adv, mps_delay;
 	uint16_t seqno;
 
 	TRACE;
@@ -1099,9 +1099,15 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 			return;
 		}
 		/* If status of BA is 0 or 1, Binding Update is accepted. */
-		if (ba->ip6mhba_status == IP6_MH_BAS_PRFX_DISCOV ||
-		    hai->home_reg_status == HOME_REG_UNCERTAIN)
+		if (ba->ip6mhba_status == IP6_MH_BAS_PRFX_DISCOV){
 			mpd_trigger_mps(&bule->hoa, &bule->peer_addr);
+		}else if( hai->home_reg_status == HOME_REG_UNCERTAIN && tsisset(ba_lifetime)){
+			if(tsisset(hai->hoa.timestamp)){
+				mps_delay = tsmin(hai->hoa.valid_time, ba_lifetime);
+				mpd_schedule_first_mps(&bule->hoa, &bule->peer_addr, &mps_delay);
+			}else
+				mpd_trigger_mps(&bule->hoa, &bule->peer_addr);
+		}
 
 		/* If BA was for home registration & succesful 
 		 *  Send RO BUs to CNs for this home address.
@@ -1327,7 +1333,7 @@ undo:
 static int conf_home_addr_info(struct home_addr_info *conf_hai)
 {
 	struct list_head *list, *n;
-	struct timespec now;
+	struct timespec init = { 0, 0 };
 	struct flag_hoa_args arg;
 	struct home_addr_info *hai;
 
@@ -1362,7 +1368,6 @@ static int conf_home_addr_info(struct home_addr_info *conf_hai)
 	if(bul_home_init(hai)) {
 		goto clean_err;
 	}
-	clock_gettime(CLOCK_REALTIME, &now);
 
 	MDBG("Home address %x:%x:%x:%x:%x:%x:%x:%x\n", 
 	     NIP6ADDR(&hai->hoa.addr)); 
@@ -1370,7 +1375,7 @@ static int conf_home_addr_info(struct home_addr_info *conf_hai)
 	hai->home_reg_status = HOME_REG_NONE;
 	hai->verdict = MN_HO_NONE;
 
-	mn_update_hoa_lifetime(&hai->hoa, &now,
+	mn_update_hoa_lifetime(&hai->hoa, &init,
 			       PREFIX_LIFETIME_INFINITE,
 			       PREFIX_LIFETIME_INFINITE);
 

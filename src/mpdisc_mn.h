@@ -19,7 +19,8 @@ int mpd_schedule_first_mps(const struct in6_addr *hoa,
 static inline int mpd_trigger_mps(const struct in6_addr *hoa, 
 				  const struct in6_addr *ha)
 {
-	return mpd_schedule_first_mps(hoa, ha, &INITIAL_SOLICIT_TIMER_TS);
+	struct timespec zero = { 0, 0 };
+	return mpd_schedule_first_mps(hoa, ha, &zero);
 }
 
 void mpd_cancel_mps(const struct in6_addr *hoa, 
