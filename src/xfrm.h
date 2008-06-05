@@ -70,6 +70,7 @@ long mn_bule_xfrm_last_used(const struct in6_addr *peer,
 
 int mn_ro_pol_add(struct home_addr_info *hai, int ifindex, int changed);
 void mn_ro_pol_del(struct home_addr_info *hai, int ifindex, int changed);
+int mn_bule_ro_pol_del(void *vbule, void *viif);
 
 int mn_ipsec_recv_bu_tnl_pol_add(struct bulentry *bule, int ifindex,
 				 struct ipsec_policy_entry *e);

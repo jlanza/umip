@@ -1242,12 +1242,14 @@ static void _mn_bule_ro_pol_del(struct bulentry *e, int iif)
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_IN);
 }
 
-static int mn_bule_ro_pol_del(void *vbule, void *viif)
+static int _xfrm_bce_reset(struct bulentry *bule);
+int mn_bule_ro_pol_del(void *vbule, void *viif)
 {
 	struct bulentry *e = vbule;
-	int *iif = viif;
 	if (e->type == BUL_ENTRY)
-		_mn_bule_ro_pol_del(e, *iif);
+		_mn_bule_ro_pol_del(e, 0);
+	if (!(e->flags & IP6_MH_BU_HOME) )
+		_xfrm_bce_reset(e);
 	return 0;
 }
 

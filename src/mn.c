@@ -782,6 +782,8 @@ static void mn_send_home_bu(struct home_addr_info *hai)
 				MDBG("Moved to foreign network\n");
 				bule->lifetime = lifetime;
 				type_movement = MIP6_TYPE_MOVEMENT_FL2FL;
+				if(&hai->bul)
+					bul_iterate(&hai->bul, mn_bule_ro_pol_del, NULL);
 			} else {
 				MDBG("Moved to home network\n");
 				type_movement = MIP6_TYPE_MOVEMENT_FL2HL;
