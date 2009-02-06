@@ -35,6 +35,10 @@
 
       CPPFLAGS='-isystem /usr/src/linux/include' ./configure
 
+   Note that you may need to specify additional include path, for
+   example on x86 architecture such as
+   '-isystem /usr/src/linux/arch/x86/include'.
+
 3. Run 'make'.  If everything went ok, you should now have mip6d
    compiled.
 

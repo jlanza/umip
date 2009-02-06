@@ -31,11 +31,11 @@
 #include <pthread.h>
 #include <errno.h>
 #include <net/if.h>
-#include <netinet/ip.h>
 #include <netinet/icmp6.h>
 #include <netinet/ip6mh.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
+#include <linux/ip.h>
 #include <linux/if_tunnel.h>
 
 #include "debug.h"
