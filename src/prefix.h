@@ -49,8 +49,7 @@ static inline void ipv6_addr_prefix(struct in6_addr *pfx,
 		pfx->s6_addr[o] = addr->s6_addr[o] & (0xff00 >> b);
 		o++;
 	}
-	if (o < 16)
-		memset(pfx->s6_addr + o, 0, 16 - o);
+	memset(pfx->s6_addr + o, 0, 16 - o);
 }
 
 static inline void ipv6_addr_create(struct in6_addr *addr,
@@ -59,18 +58,17 @@ static inline void ipv6_addr_create(struct in6_addr *addr,
 {
 	int o, b;
 
+	plen = (plen > 128 || plen < 0) ? 0 : plen;
 	o = plen >> 3;
 	b = plen & 0x7;
 
-	if (o > 0)
-		memcpy(addr->s6_addr,  pfx->s6_addr, o);
+	memcpy(addr->s6_addr,  pfx->s6_addr, o);
 	if (b != 0) {
 		addr->s6_addr[o] = ((pfx->s6_addr[o] & (0xff00 >> b)) |
 				    (sfx->s6_addr[o] & (0x00ff >> b)));
 		o++;
 	}
-	if (o < 16)
-		memcpy(addr->s6_addr + o, sfx->s6_addr + o, 16 - o);
+	memcpy(addr->s6_addr + o, sfx->s6_addr + o, 16 - o);
 }
 
 /**
