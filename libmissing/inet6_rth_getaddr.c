@@ -2,6 +2,7 @@
 
 /* This is a substitute for a missing inet6_rth_getaddr(). */
 
+#include <stdio.h>
 #include <netinet/in.h>
 
 struct in6_addr *inet6_rth_getaddr(const void *bp, int index)
