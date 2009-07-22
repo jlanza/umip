@@ -836,9 +836,28 @@ restart:
 	if (!tsisset(lft))
 		bcache_delete(out.src, out.dst);
 
-	if ((bu_flags & IP6_MH_BU_KEYM) && 
-	    conf.pmgr.use_keymgm(out.dst, out.src))
-		ba_flags |= IP6_MH_BA_KEYM;
+	if (conf.pmgr.use_keymgm(out.dst, out.src))
+	{
+		if (bu_flags & IP6_MH_BU_KEYM) {
+			ba_flags |= IP6_MH_BA_KEYM;
+		} else {
+			/* The remote MN does not support session mvt,
+			   so we remove from the bce. */
+			bce->flags &= ~IP6_MH_BU_KEYM;
+			cdbg(
+			 "MN (%x:%x:%x:%x:%x:%x:%x:%x) does not support IKE session movement.\n",
+			 NIP6ADDR(out.src));
+		}
+	} else {
+		if (bu_flags & IP6_MH_BU_KEYM) {
+			/* Local policy does not allow using IKE movement */
+			bce->flags &= ~IP6_MH_BU_KEYM;
+			cdbg(
+			 "MN (%x:%x:%x:%x:%x:%x:%x:%x) would support IKE session movement,"
+			 " but local policy denies it.\n",
+			 NIP6ADDR(out.src));
+		}
+	}
 
 	if (ba_flags & IP6_MH_BA_KEYM) {
 		/* FUTURE */

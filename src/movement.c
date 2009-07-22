@@ -637,9 +637,9 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 				       sizeof(iface->devconf));
 			}
 		}
-		if (iface->devconf[DEVCONF_RTR_SOLICITS] == 0)
+		if (iface->devconf[DEVCONF_RTR_SOLICITS] <= 0)
 			iface->devconf[DEVCONF_RTR_SOLICITS] = conf_default_rs;
-		if (iface->devconf[DEVCONF_RTR_SOLICIT_INTERVAL] == 0)
+		if (iface->devconf[DEVCONF_RTR_SOLICIT_INTERVAL] <= 0)
 			iface->devconf[DEVCONF_RTR_SOLICIT_INTERVAL] = conf_default_rs_ival;
 		MDBG3("creating iface %s (%d)\n", iface->name, iface->ifindex);
 	}

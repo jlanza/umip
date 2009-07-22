@@ -2,6 +2,7 @@
 
 /* This is a substitute for a missing inet6_opt_find(). */
 
+#include <stddef.h>
 #include <netinet/in.h>
 
 #ifndef IP6OPT_PAD1

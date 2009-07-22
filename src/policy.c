@@ -168,7 +168,7 @@ int default_use_bradv(const struct in6_addr *remote_hoa,
 int default_use_keymgm(const struct in6_addr *remote_addr,
 		       const struct in6_addr *local_addr)
 {
-	return 0;
+	return conf.KeyMngMobCapability;
 }
 
 /**

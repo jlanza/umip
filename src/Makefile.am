@@ -72,3 +72,7 @@ noinst_HEADERS = ../include/netinet/icmp6.h \
 		 ../include/netinet/in.h \
 		 ../include/netinet/ip6.h \
 		 ../include/netinet/ip6mh.h
+
+CLEANFILES = gram.c gram.h \
+	     pmgr.c pmgr.h \
+	     scan.c

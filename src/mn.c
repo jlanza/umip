@@ -675,6 +675,8 @@ static int process_first_home_bu(struct bulentry *bule,
 	int err = 0;
 	bule->type = BUL_ENTRY;
 	bule->flags = IP6_MH_BU_HOME | IP6_MH_BU_ACK | hai->lladdr_comp;
+	if (conf.UseMnHaIPsec && conf.KeyMngMobCapability)
+		bule->flags |= IP6_MH_BU_KEYM;
 	bule->coa_changed = -1;
 	bule->coa = hai->primary_coa.addr;
 	bule->if_coa = hai->primary_coa.iif;
@@ -1121,8 +1123,18 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 		if (bule->flags & IP6_MH_BU_KEYM) {
 			if (ba->ip6mhba_flags & IP6_MH_BA_KEYM) {
 				/* Inform IKE  to send readdress msg */
+
 			} else {
 				/* Inform IKE to renegotiate SAs */
+
+				/* Remove the flag from this bule */
+				bule->flags &= ~IP6_MH_BU_KEYM;
+
+				/* Issue a warning */
+				syslog(LOG_ERR,
+			         "HA does not support IKE session surviving, "
+			         "traffic may be interrupted after movements.\n"
+				 );
 			}
 		}
 		bra = mh_opt(&ba->ip6mhba_hdr, &mh_opts, IP6_MHOPT_BREFRESH);
