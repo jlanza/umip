@@ -51,6 +51,7 @@
 #include "conf.h"
 #include "bcache.h"
 #include "keygen.h"
+#include "prefix.h"
 
 #define MH_DEBUG_LEVEL 1
 
@@ -75,6 +76,7 @@ int mh_opts_dup_ok[] = {
 	0, /* Alternate CoA */
 	0, /* Nonce Index */
 	0, /* Binding Auth Data */
+	1, /* Mobile Network Prefix */
 };
 
 #define __MH_SENTINEL (IP6_MH_TYPE_MAX + 1)
@@ -401,6 +403,46 @@ static int create_opt_pad(struct iovec *iov, int pad)
 	return 0;
 }
 
+int mh_create_opt_mob_net_prefix(struct iovec *iov, int mnp_count,
+				 struct list_head *mnps)
+{
+	int optlen = (mnp_count * sizeof(struct ip6_mh_opt_mob_net_prefix) +
+		      (mnp_count - 1) * sizeof(_pad4));
+	struct list_head *l;
+	int i = 0;
+	uint8_t *data;
+	iov->iov_base = malloc(optlen);
+	iov->iov_len = optlen;
+
+	if (iov->iov_base == NULL)
+		return -ENOMEM;
+
+	memset(iov->iov_base, 0, iov->iov_len);
+	data = (uint8_t *)iov->iov_base;
+
+	list_for_each(l, mnps) {
+		struct prefix_list_entry *p;
+		struct ip6_mh_opt_mob_net_prefix *mnp;
+
+		p = list_entry(l, struct prefix_list_entry, list);
+		mnp = (struct ip6_mh_opt_mob_net_prefix *)data;
+
+		mnp->ip6mnp_type = IP6_MHOPT_MOB_NET_PRFX;
+		mnp->ip6mnp_len = 18;
+		mnp->ip6mnp_prefix_len = p->ple_plen;
+		mnp->ip6mnp_prefix = p->ple_prefix;
+
+		data += sizeof(struct ip6_mh_opt_mob_net_prefix);
+
+		/* do internal padding here, so one iovec for MNPs is enough */
+		if (++i < mnp_count) {
+		  memcpy(data, _pad4, sizeof(_pad4));
+		  data += sizeof(_pad4);
+		}
+	}
+	return 0;
+}
+
 static size_t mh_length(struct iovec *vec, int count)
 {
 	size_t len = 0;
@@ -441,6 +483,9 @@ static int mh_try_pad(const struct iovec *in, struct iovec *out, int count)
 			break;
 		case IP6_MHOPT_BAUTH:
 			pad = optpad(8, 2, len); /* 8n+2 */
+			break;
+		case IP6_MHOPT_MOB_NET_PRFX:
+			pad = optpad(8, 4, len); /* 8n+4 */
 			break;
 		}
 		if (pad > 0) {
@@ -694,6 +739,8 @@ static int mh_opt_len_chk(uint8_t type, int len)
 		return len != sizeof(struct ip6_mh_opt_nonce_index);
 	case IP6_MHOPT_BAUTH:
 		return len != sizeof(struct ip6_mh_opt_auth_data);
+	case IP6_MHOPT_MOB_NET_PRFX:
+		return len != sizeof(struct ip6_mh_opt_mob_net_prefix);
 	case IP6_MHOPT_PADN:
 	default:
 		return 0;

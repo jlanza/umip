@@ -30,10 +30,10 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include <stdio.h>
 #include <pthread.h>
 #include <netinet/in.h>
 #include <net/if.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <netinet/ip6mh.h>
@@ -54,8 +54,23 @@ struct net_iface ni = {
 };
 	
 struct home_addr_info hai = {
-	.ro_policies = LIST_HEAD_INIT(hai.ro_policies)
+	.ro_policies = LIST_HEAD_INIT(hai.ro_policies),
+	.mob_net_prefixes = LIST_HEAD_INIT(hai.mob_net_prefixes)
 };
+
+LIST_HEAD(prefixes);
+
+int mv_prefixes(struct list_head *list)
+{
+	struct list_head *l, *n;
+	int res = 0;
+	list_for_each_safe(l, n, &prefixes) {
+		list_del(l);
+		list_add_tail(l, list);
+		res++;
+	}
+	return res;
+}
 
 struct policy_bind_acl_entry *bae = NULL;
 
@@ -165,6 +180,11 @@ static void uerror(const char *fmt, ...) {
 %token		MNROUTERPROBETIMEOUT
 %token		MNDISCARDHAPARAMPROB
 %token		OPTIMISTICHANDOFF
+%token		HOMEPREFIX
+%token		HAACCEPTMOBRTR
+%token		ISMOBRTR
+%token		HASERVEDPREFIX
+%token		MOBRTRUSEEXPLICITMODE
 
 %token		INV_TOKEN
 
@@ -282,6 +302,19 @@ topdef		: MIP6ENTITY mip6entity ';'
 		{
 			conf.DefaultBindingAclPolicy = $2;
 		}
+		| HAACCEPTMOBRTR BOOL ';'
+		{
+			conf.HaAcceptMobRtr = $2;
+		}
+		| HASERVEDPREFIX prefixlistentry ';'
+		{
+			list_splice(&prefixes,
+				    conf.nemo_ha_served_prefixes.prev);
+		}
+		| MOBRTRUSEEXPLICITMODE BOOL ';'
+		{
+			conf.MobRtrUseExplicitMode = $2;
+		}
 		| BINDINGACLPOLICY bindaclpolicy ';' 
 		{
 			bae = NULL;
@@ -398,12 +431,16 @@ linksub		: QSTRING '{' linkdefs '}'
 			memcpy(nhai, &hai, sizeof(struct home_addr_info));
 			INIT_LIST_HEAD(&nhai->ro_policies);
 			INIT_LIST_HEAD(&nhai->ha_list.home_agents);
+			INIT_LIST_HEAD(&nhai->mob_net_prefixes);
 			nhai->ha_list.dhaad_id = -1;
 			list_splice(&hai.ro_policies, &nhai->ro_policies);
+			list_splice(&hai.mob_net_prefixes,
+				    &nhai->mob_net_prefixes);
 			list_add_tail(&nhai->list, &conf.home_addrs);
 
 			memset(&hai, 0, sizeof(struct home_addr_info));
 			INIT_LIST_HEAD(&hai.ro_policies);
+			INIT_LIST_HEAD(&hai.mob_net_prefixes);
 		}
 		;
 
@@ -415,16 +452,35 @@ linkdef		: HOMEAGENTADDRESS ADDR ';'
 		{
 			memcpy(&hai.ha_addr, &$2, sizeof(struct in6_addr));
 		}
-		| HOMEADDRESS ADDR '/' prefixlen ';'
-		{
-			hai.hoa.addr = $2;
-			hai.plen = $4;
-		}
+		| HOMEADDRESS homeaddress ';'
 		| USEALTCOA BOOL ';'
                 {
 		        hai.altcoa = $2;
 		}	  
 		| MNROPOLICY mnropolicy ';'
+		| ISMOBRTR BOOL ';'
+                {
+			if ($2)
+				hai.mob_rtr = IP6_MH_BU_MR;
+		}
+		|  HOMEPREFIX ADDR '/' prefixlen ';'
+                {
+			ipv6_addr_prefix(&hai.home_prefix, &$2, $4);
+			hai.home_plen = $4;
+		}
+		;
+
+homeaddress	: homeaddrdef prefixlistsub
+		{
+			hai.mnp_count = mv_prefixes(&hai.mob_net_prefixes);
+		}
+		;
+
+homeaddrdef	: ADDR '/' prefixlen
+		{
+			hai.hoa.addr = $1;
+			hai.plen = $3;
+		}
 		;
 
 ipsecpolicyset	: ipsechaaddrdef ipsecmnaddrdefs ipsecpolicydefs
@@ -639,7 +695,7 @@ bindaclpolval	: BOOL
 		| NUMBER { $$ = $1; }
 		;
 
-bindaclpolicy	: ADDR bindaclpolval
+bindaclpolicy	: ADDR prefixlistsub bindaclpolval
 		{
 			bae = malloc(sizeof(struct policy_bind_acl_entry));
 			if (bae == NULL) {
@@ -649,7 +705,9 @@ bindaclpolicy	: ADDR bindaclpolval
 			memset(bae, 0, sizeof(struct policy_bind_acl_entry)); 
 			bae->hoa = $1;
 			bae->plen = 128;
-			bae->bind_policy = $2;
+			INIT_LIST_HEAD(&bae->mob_net_prefixes);
+			bae->mnp_count = mv_prefixes(&bae->mob_net_prefixes);
+			bae->bind_policy = $3;
 			list_add_tail(&bae->list, &conf.bind_acl);
 		}
 		;
@@ -664,4 +722,27 @@ prefixlen	: NUMBER
 		}
 		;
 
+prefixlistsub	:
+		| '(' prefixlist ')'
+		;
+
+prefixlist	: prefixlistentry
+		| prefixlist ',' prefixlistentry
+		;
+
+prefixlistentry	: ADDR '/' prefixlen
+		{
+			struct prefix_list_entry *p;
+			p = malloc(sizeof(struct prefix_list_entry));
+			if (p == NULL) {
+				fprintf(stderr,
+					"%s: out of memory\n", __FUNCTION__);
+				return -1;
+			}
+			memset(p, 0, sizeof(struct prefix_list_entry));
+			p->ple_prefix = $1;
+			p->ple_plen = $3;
+			list_add_tail(&p->list, &prefixes);
+		}
+		;
 %%

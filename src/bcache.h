@@ -18,7 +18,8 @@ struct bcentry {
 
 	uint16_t nonce_coa;
 	uint16_t nonce_hoa;
-	int type;			/* Entry type */
+	uint16_t type;     		/* Entry type */
+	uint16_t nemo_type;    		/* NEMO registration type */
 	int unreach;			/* ICMP dest unreach count */
 	int tunnel;			/* Tunnel interface index */
 	int link;			/* Home link interface index */
@@ -33,6 +34,8 @@ struct bcentry {
 	struct tq_elem tqe;		/* Timer queue entry for expire */
 
 	void (*cleanup)(struct bcentry *bce); /* Clean up bce data */
+
+	struct list_head mob_net_prefixes;
 };
 
 #define BCE_NONCE_BLOCK 0
@@ -40,6 +43,10 @@ struct bcentry {
 #define BCE_CACHED  2
 #define BCE_CACHE_DYING 3
 #define BCE_DAD 4
+
+#define BCE_NEMO_EXPLICIT 1
+#define BCE_NEMO_IMPLICIT 2
+#define BCE_NEMO_DYNAMIC 3
 
 struct bcentry *bcache_alloc(int type);
 

@@ -10,12 +10,15 @@
 
 struct ip6_mh_binding_update;
 struct nd_router_advert;
+struct nd_opt_prefix_info;
 
 struct policy_bind_acl_entry {
 	struct list_head list;
 	struct in6_addr hoa;
 	int plen;
 	int bind_policy;
+	int mnp_count;
+	struct list_head mob_net_prefixes;
 };
 
 /**
@@ -146,6 +149,12 @@ int default_accept_ra(int iif,
 int default_best_ro_coa(const struct in6_addr *hoa,
 			const struct in6_addr *cn,
 			struct in6_addr *coa);
+
+int default_get_mnp_count(const struct in6_addr *hoa);
+
+int default_get_mnps(const struct in6_addr *hoa,
+		     const int mnp_count,
+		     struct nd_opt_prefix_info *mnps);
 
 void policy_cleanup(void);
 

@@ -39,6 +39,7 @@ struct mip6_config {
 	struct list_head home_addrs;
 	char *MoveModulePath;
 	uint16_t CnBuAck;
+	char MobRtrUseExplicitMode;
 	char DoRouteOptimizationMN;
 	char MnUseAllInterfaces;
 	char MnDiscardHaParamProb;
@@ -46,15 +47,16 @@ struct mip6_config {
 	char OptimisticHandoff;
 
 	/* HA options */
+	char HaAcceptMobRtr;
 	char SendMobPfxAdvs;
 	char SendUnsolMobPfxAdvs;
 	unsigned int MaxMobPfxAdvInterval;
 	unsigned int MinMobPfxAdvInterval;
 	unsigned int HaMaxBindingLife;
+	struct list_head nemo_ha_served_prefixes;
 
 	/* CN options */
 	char DoRouteOptimizationCN;
-
 };
 
 struct net_iface {

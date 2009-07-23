@@ -79,6 +79,7 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 	struct ha_interface *iface;
 	uint16_t pref = 0;
 	uint16_t life = 0;
+	uint16_t flags = 0;
 
 	/* validity checks */
 	if (hoplimit < 255 || !IN6_IS_ADDR_LINKLOCAL(src) ||
@@ -120,6 +121,7 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 			hainfo = (struct nd_opt_homeagent_info *)opt;
 			pref = ntohs(hainfo->nd_opt_hai_preference);
 			life = ntohs(hainfo->nd_opt_hai_lifetime);
+			flags = hainfo->nd_opt_hai_flags_reserved;
 		}
 		optlen -= olen;
 		opt += olen;
@@ -129,7 +131,7 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 		if (pinfo[i]->nd_opt_pi_flags_reserved & 
 		    ND_OPT_PI_FLAG_RADDR) {
 			dhaad_insert_halist(iface, pref, life,
-					    pinfo[i], src);
+					    flags, pinfo[i], src);
 		}
 	}
 	mpd_del_expired_pinfos(iface);
@@ -499,14 +501,53 @@ static int ha_vt_init(void)
 }
 #endif
 
+
+static void nemo_ha_del_mnp_routes(struct list_head *old_mnps,
+				   struct list_head *new_mnps,
+				   int ifindex, int all)
+{
+	struct list_head *list;
+	list_for_each(list, old_mnps) {
+		struct prefix_list_entry *p;
+		p = list_entry(list, struct prefix_list_entry, list);
+		if (!all &&
+		    prefix_list_find(new_mnps, &p->ple_prefix, p->ple_plen))
+			continue;
+
+		route_del(ifindex, RT6_TABLE_MIP6, IP6_RT_PRIO_MIP6_FWD,
+			  NULL, 0, &p->ple_prefix, p->ple_plen, NULL);
+	}
+}
+
+static int nemo_ha_add_mnp_routes(struct list_head *old_mnps,
+				  struct list_head *new_mnps,
+				  int ifindex, int all)
+{
+	struct list_head *list;
+	list_for_each(list, new_mnps) {
+		struct prefix_list_entry *p;
+		p = list_entry(list, struct prefix_list_entry, list);
+		if (!all &&
+		    prefix_list_find(old_mnps, &p->ple_prefix, p->ple_plen))
+			continue;
+		if (route_add(ifindex, RT6_TABLE_MIP6, RTPROT_MIP,
+			      0, IP6_RT_PRIO_MIP6_FWD,
+			      NULL, 0, &p->ple_prefix, p->ple_plen, NULL) < 0)
+			return -1;
+	}
+	return 0;
+}
+
 struct home_tnl_ops_parm {
 	struct bcentry *bce;
 	int ba_status;
+	struct list_head mob_net_prefixes;
 };
 
 static int home_tnl_del(int old_if, int new_if, struct home_tnl_ops_parm *p)
 {
 	const struct in6_addr *our_addr, *peer_addr, *coa, *old_coa;
+	struct list_head *mnp;
 
 	assert(old_if);
 
@@ -514,17 +555,22 @@ static int home_tnl_del(int old_if, int new_if, struct home_tnl_ops_parm *p)
 	peer_addr = &p->bce->peer_addr;
 	coa = &p->bce->peer_addr;
 	old_coa = &p->bce->coa;
+	mnp = &p->bce->mob_net_prefixes;
 
 	if (conf.UseMnHaIPsec) {
 		/* migrate */ 
 		ha_ipsec_tnl_update(our_addr, peer_addr,
-				    coa, old_coa, p->bce->tunnel);
+				    coa, old_coa, p->bce->tunnel, mnp);
 		/* delete SP entry */ 
-		ha_ipsec_tnl_pol_del(our_addr, peer_addr, p->bce->tunnel);
+		ha_ipsec_tnl_pol_del(our_addr, peer_addr, p->bce->tunnel, mnp);
 	}
 	/* delete HoA route */
 	route_del(old_if, RT6_TABLE_MAIN,
 		  IP6_RT_PRIO_MIP6_FWD, NULL, 0, peer_addr, 128, NULL);
+
+	/* delete MNP routes */
+	nemo_ha_del_mnp_routes(&p->bce->mob_net_prefixes,
+			       &p->mob_net_prefixes, old_if, 1);
 	/* update tunnel interface */
 	p->bce->tunnel = new_if;
 
@@ -534,17 +580,29 @@ static int home_tnl_del(int old_if, int new_if, struct home_tnl_ops_parm *p)
 static int home_tnl_add(int old_if, int new_if, struct home_tnl_ops_parm *p)
 {
 	const struct in6_addr *our_addr, *peer_addr, *coa, *old_coa;
+	struct list_head *mnp;
 
 	assert(new_if);
 
 	our_addr = &p->bce->our_addr;
 	peer_addr = &p->bce->peer_addr;
 	coa = &p->bce->coa;
-	old_coa = &p->bce->peer_addr;
+	old_coa = IN6_ARE_ADDR_EQUAL(&p->bce->old_coa, &in6addr_any) ?
+		&p->bce->peer_addr : &p->bce->old_coa;
+	mnp = &p->mob_net_prefixes;
 
 	/* update tunnel interface */
 	p->bce->tunnel = new_if;
 
+	/* add MNP routes */
+	if (nemo_ha_add_mnp_routes(&p->bce->mob_net_prefixes,
+				   &p->mob_net_prefixes, new_if, 1) < 0) {
+		if (p->bce->nemo_type == BCE_NEMO_EXPLICIT)
+			p->ba_status = IP6_MH_BAS_INVAL_PRFX;
+		else
+			p->ba_status = IP6_MH_BAS_FWDING_FAILED;
+		goto err;
+	}
 	/* add HoA route */
 	if (route_add(new_if, RT6_TABLE_MAIN,
 		      RTPROT_MIP, 0, IP6_RT_PRIO_MIP6_FWD,
@@ -555,13 +613,13 @@ static int home_tnl_add(int old_if, int new_if, struct home_tnl_ops_parm *p)
 	/* add SP entry */	
 	if (conf.UseMnHaIPsec) {
 		if (ha_ipsec_tnl_pol_add(our_addr, peer_addr,
-					 p->bce->tunnel) < 0) {
+					 p->bce->tunnel, mnp) < 0) {
 			p->ba_status = IP6_MH_BAS_INSUFFICIENT;
 			goto err;
 		}
 		/* migrate */ 
 		if (ha_ipsec_tnl_update(our_addr, peer_addr, coa, old_coa,
-					p->bce->tunnel) < 0) {
+					p->bce->tunnel, mnp) < 0) {
 			p->ba_status = IP6_MH_BAS_INSUFFICIENT;
 			goto err;
 		}
@@ -578,17 +636,51 @@ static int home_tnl_chg(int old_if, int new_if, struct home_tnl_ops_parm *p)
 
 	if (old_if == new_if) {
 		const struct in6_addr *our_addr, *peer_addr, *coa, *old_coa;
+		struct list_head *mnp;
 
 		our_addr = &p->bce->our_addr;
 		peer_addr = &p->bce->peer_addr;
 		coa = &p->bce->coa;
 		old_coa = &p->bce->old_coa;
+		mnp = &p->mob_net_prefixes;
+
+		/* if interface hasn't changed, at least check if the
+		   MR's MNPs have changed */
+		if (!prefix_list_cmp(&p->bce->mob_net_prefixes,
+				     &p->mob_net_prefixes)) {
+
+			/* Remove old policies and install new ones */
+			if (conf.UseMnHaIPsec) {
+				ha_ipsec_mnp_pol_del(our_addr, peer_addr,
+						     &p->bce->mob_net_prefixes,
+						     &p->mob_net_prefixes,
+						     p->bce->tunnel);
+				ha_ipsec_mnp_pol_add(our_addr, peer_addr,
+						     &p->bce->mob_net_prefixes,
+						     &p->mob_net_prefixes,
+						     p->bce->tunnel);
+			}
+
+			/* Do the same for routes */
+			nemo_ha_del_mnp_routes(&p->bce->mob_net_prefixes,
+					       &p->mob_net_prefixes,
+					       old_if, 0);
+			if (nemo_ha_add_mnp_routes(&p->bce->mob_net_prefixes,
+						   &p->mob_net_prefixes,
+						   new_if, 0) < 0) {
+				if (p->bce->nemo_type == BCE_NEMO_EXPLICIT)
+					p->ba_status = IP6_MH_BAS_INVAL_PRFX;
+				else
+					p->ba_status = IP6_MH_BAS_FWDING_FAILED;
+				return -1;
+			}
+		}
 
 		/* migrate */ 
 		if (conf.UseMnHaIPsec &&
 		    !IN6_ARE_ADDR_EQUAL(old_coa, coa) &&
 		    ha_ipsec_tnl_update(our_addr, peer_addr, coa, old_coa,
-					p->bce->tunnel) < 0) {
+					p->bce->tunnel, mnp) < 0) {
 			return -1;
 		}
 	} else { 
@@ -632,6 +724,61 @@ static void home_cleanup(struct bcentry *bce)
 	if (conf.UseMnHaIPsec) {
 		ha_mn_ipsec_pol_mod(&bce->our_addr, &bce->peer_addr);
 	}
+}
+
+
+static int ha_extract_mnps(const struct ip6_mh_binding_update *bu,
+			   const struct mh_options *opts,
+			   struct list_head *mob_net_prefixes)
+{
+	struct ip6_mh_opt_mob_net_prefix *op;
+	int prefix_count = 0;
+	for (op = mh_opt(&bu->ip6mhbu_hdr, opts, IP6_MHOPT_MOB_NET_PRFX);
+	     op != NULL;
+	     op = mh_opt_next(&bu->ip6mhbu_hdr, opts, op)) {
+		struct prefix_list_entry *p;
+		p = malloc(sizeof(struct prefix_list_entry));
+		if (p == NULL) {
+			prefix_list_free(mob_net_prefixes);
+			return -1;
+		}
+		memset(p, 0, sizeof(struct prefix_list_entry));
+		p->ple_plen = op->ip6mnp_prefix_len;
+		p->ple_prefix = op->ip6mnp_prefix;
+		list_add_tail(&p->list, mob_net_prefixes);
+		prefix_count++;
+	}
+	return prefix_count;
+}
+
+static int ha_get_mnps(const struct in6_addr *hoa,
+		       struct list_head *mob_net_prefixes)
+{
+	struct nd_opt_prefix_info *mnps;
+	int mnp_count = conf.pmgr.get_mnp_count(hoa);
+	int i;
+
+	if (mnp_count <= 0)
+		return mnp_count;
+
+	mnps = calloc(mnp_count, sizeof(struct nd_opt_prefix_info));
+	if (mnps == NULL)
+		return -1;
+
+	mnp_count = conf.pmgr.get_mnps(hoa, mnp_count, mnps);
+	for (i = 0; i < mnp_count; i++) {
+		struct prefix_list_entry *p;
+		p = malloc(sizeof(struct prefix_list_entry));
+		if (p == NULL) {
+			prefix_list_free(mob_net_prefixes);
+			free(mnps);
+			return -1;
+		}
+		p->pinfo = *(mnps + i);
+		list_add_tail(&p->list, mob_net_prefixes);
+	}
+	free(mnps);
+	return mnp_count;
 }
 
 struct ha_recv_bu_args {
@@ -684,8 +831,9 @@ restart:
 	bce = bcache_get(out.src, out.dst);
 	if (bce) {
 		if (bce->type != BCE_NONCE_BLOCK) {
-			if (!(bce->flags & IP6_MH_BU_HOME)) {
-				/* H-bit mismatch, flags changed */
+			/* H-bit or R-bit mismatch, flags changed */
+			if ((bce->flags ^ bu_flags) &
+			    (IP6_MH_BU_HOME | IP6_MH_BU_MR)) {
 				bcache_release_entry(bce);
 				bce = NULL;
 				status = IP6_MH_BAS_REG_NOT_ALLOWED;
@@ -733,9 +881,15 @@ restart:
 	}
 	if ((status = mpd_prefix_check(out.src, out.dst,
 				       &lft, &home_ifindex, new)) < 0) {
-		/* not home agent for this subnet */
-		status = IP6_MH_BAS_NOT_HOME_SUBNET;
-		goto send_nack;
+		if (!(bu_flags & IP6_MH_BU_MR) ||
+		    home_ifindex == 0 ||
+		    !prefix_list_find(&conf.nemo_ha_served_prefixes,
+		     		      out.dst, 0)) {
+			/* not home agent for this subnet */
+			status = IP6_MH_BAS_NOT_HOME_SUBNET;
+			goto send_nack;
+		}
+		status = IP6_MH_BAS_ACCEPTED;
 	}
 	status = conf.pmgr.discard_binding(out.dst, out.bind_coa,
 					   out.src, arg->bu, arg->len);
@@ -787,6 +941,25 @@ restart:
 		}
 		new = 1;
 	}
+	INIT_LIST_HEAD(&p.mob_net_prefixes);
+	if (bu_flags & IP6_MH_BU_MR && tsisset(lft)) {
+		if (mh_opt(&arg->bu->ip6mhbu_hdr,
+			   &arg->mh_opts, IP6_MHOPT_MOB_NET_PRFX) != NULL) {
+			if (ha_extract_mnps(arg->bu,
+					    &arg->mh_opts,
+					    &p.mob_net_prefixes) < 0) {
+				status = IP6_MH_BAS_INVAL_PRFX;
+				goto send_nack;
+			}
+			bce->nemo_type = BCE_NEMO_EXPLICIT;
+		} else if (ha_get_mnps(out.dst, &p.mob_net_prefixes) > 0) {
+			bce->nemo_type = BCE_NEMO_IMPLICIT;
+		} else {
+			/* Todo: dynamic routing */
+			status = IP6_MH_BAS_FWDING_FAILED;
+			goto send_nack;
+		}
+	}
 	p.bce = bce;
 	p.ba_status = status;
 	bce->seqno = seqno;
@@ -801,6 +974,9 @@ restart:
 				status = IP6_MH_BAS_INSUFFICIENT;
 			goto send_nack;
 		}
+		/* Now save the MNP list in the BCE */
+		list_splice(&p.mob_net_prefixes, &bce->mob_net_prefixes);
+
 		bce->cleanup = home_cleanup;
 
 		if (route_add(bce->link, RT6_TABLE_MIP6,
@@ -829,6 +1005,10 @@ restart:
 				status = IP6_MH_BAS_INSUFFICIENT;
 			goto send_nack;
 		}
+		/* Now update the MNP list in the BCE */
+		prefix_list_free(&bce->mob_net_prefixes);
+		list_splice(&p.mob_net_prefixes, &bce->mob_net_prefixes);
+
 		bcache_update_expire(bce);
 	}
 	/* bce is always valid here */
@@ -874,6 +1054,9 @@ restart:
 		 * have a binding before sending this Binding Update,
 		 * discard the connections to the home address. */
 	}
+ 	if (status < IP6_MH_BAS_UNSPECIFIED && bu_flags & IP6_MH_BU_MR)
+ 		ba_flags |= IP6_MH_BA_MR;
+
 	if (!(arg->flags & HA_BU_F_SKIP_BA))
 		mh_send_ba(&out, status, ba_flags, seqno, &lft, NULL, iif);
 	if (new && tsisset(lft))

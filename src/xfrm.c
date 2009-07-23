@@ -257,6 +257,30 @@ static void set_selector(const struct in6_addr *daddr,
 		sel->prefixlen_s = 128;
 }
 
+/* NEMO specific version of set_selector(): set xfrm_selector
+ * fields for IPsec policies and states. If NULL is passed as
+ * src or dst prefix, any is used, i.e. ::/0 */
+static void mr_set_selector(const struct prefix_list_entry *src,
+			    const struct prefix_list_entry *dst,
+			    uid_t uid, struct xfrm_selector *sel)
+{
+	memset(sel, 0, sizeof(*sel));
+	sel->family = AF_INET6;
+	sel->user = uid;
+
+	if (src != NULL) {
+		memcpy(&sel->saddr.a6, &src->ple_prefix,
+		       sizeof(sel->saddr.a6));
+		sel->prefixlen_s = src->ple_plen;
+	}
+
+	if (dst != NULL) {
+		memcpy(&sel->daddr.a6, &dst->ple_prefix,
+		       sizeof(sel->daddr.a6));
+		sel->prefixlen_d = dst->ple_plen;
+	}
+}
+
 /** 
  * xfrm_last_used - when was a binding  last used
  * @daddr: destination address (home address)
@@ -679,12 +703,65 @@ static int _mn_ha_ipsec_bypass_init(const struct in6_addr *haaddr,
 	return err;
 }
 
+static int mr_ipsec_bypass_init(void)
+{
+	struct list_head *home;
+	struct list_head *mnps;
+	int err=0;
+
+	/* Loop for each HomeAddress info */
+	list_for_each(home, &conf.home_addrs)
+	{
+		struct home_addr_info *hai;
+		hai = list_entry(home, struct home_addr_info, list);
+
+		/* If Mobile Router for this link, loop for each MNP */
+		if (hai->mob_rtr)
+		{
+			/* Add bypass policies to and from the MNP link */
+			list_for_each(mnps, &hai->mob_net_prefixes)
+			{
+				struct prefix_list_entry * mnp;
+				struct xfrm_selector sel;
+				uid_t uid = getuid();
+
+				mnp = list_entry(mnps, struct prefix_list_entry, list);
+
+				/* IN, src = MNP , dst = any */
+				mr_set_selector(mnp, NULL, uid, &sel);
+				err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_IN,
+                                XFRM_POLICY_ALLOW,
+							    MIP6_PRIO_MR_LOCAL_DATA_BYPASS,
+							    NULL, 0);
+
+				/* FWD, src = MNP , dst = any */
+				err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_FWD,
+                                XFRM_POLICY_ALLOW,
+							    MIP6_PRIO_MR_LOCAL_DATA_BYPASS,
+							    NULL, 0);
+
+				/* OUT, src = any , dst = MNP */
+				mr_set_selector(NULL, mnp, uid, &sel);
+				err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_OUT,
+                                XFRM_POLICY_ALLOW,
+							    MIP6_PRIO_MR_LOCAL_DATA_BYPASS,
+							    NULL, 0);
+			}
+		}
+	}
+
+	return err;
+}
+
 static inline int mn_ha_ipsec_init(void)
 {
 	int err;
 
 	/* insert bypass policy */
 	err = ipsec_policy_walk(_mn_ha_ipsec_bypass_init, NULL);
+
+	/* insert NEMO-related bypass */
+	err = mr_ipsec_bypass_init();
 
 	err = ipsec_policy_walk(_mn_ha_ipsec_init, NULL);
 
@@ -787,9 +864,53 @@ static int _mn_ha_ipsec_bypass_cleanup(const struct in6_addr *haaddr,
 	return err;
 }
 
+static int mr_ipsec_bypass_cleanup(void)
+{
+	struct list_head *home;
+	struct list_head *mnps;
+	int err=0;
+
+	/* Loop for each HomeAddress info */
+	list_for_each(home, &conf.home_addrs)
+	{
+		struct home_addr_info *hai;
+		hai = list_entry(home, struct home_addr_info, list);
+
+		/* If Mobile Router for this link, loop for each MNP */
+		if (hai->mob_rtr)
+		{
+			/* Delete bypass policies to and from the MNP link */
+			list_for_each(mnps, &hai->mob_net_prefixes)
+			{
+				struct prefix_list_entry * mnp;
+				struct xfrm_selector sel;
+				uid_t uid = getuid();
+
+				mnp = list_entry(mnps, struct prefix_list_entry, list);
+
+				/* IN, src = MNP , dst = any */
+				mr_set_selector(mnp, NULL, uid, &sel);
+				err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_IN);
+
+				/* FWD, src = MNP , dst = any */
+				err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_FWD);
+
+				/* OUT, src = any , dst = MNP */
+				mr_set_selector(NULL, mnp, uid, &sel);
+				err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_OUT);
+			}
+		}
+	}
+
+	return err;
+}
+
+
 static inline void mn_ha_ipsec_cleanup(void)
 {
 	ipsec_policy_walk(_mn_ha_ipsec_bypass_cleanup, NULL);
+
+	(void)mr_ipsec_bypass_cleanup();
 
 	ipsec_policy_walk(_mn_ha_ipsec_cleanup, NULL);
 }
@@ -1721,6 +1842,8 @@ int xfrm_pre_bu_add_bule(struct bulentry *bule)
 		if (hai->home_block & HOME_LINK_BLOCK)
 			xfrm_unblock_link(hai);
 		xfrm_block_link(hai);
+		if (hai->mob_rtr && !(hai->home_block & NEMO_FWD_BLOCK))
+			xfrm_block_fwd(hai);
 	}
 	if (IN6_ARE_ADDR_EQUAL(&bule->hoa, &bule->coa)) {
 		if (rdata)
@@ -1786,6 +1909,8 @@ int xfrm_post_ba_mod_bule(struct bulentry *bule)
 		struct home_addr_info *hai = bule->home;
 		if (hai->home_block & HOME_LINK_BLOCK)
 			xfrm_unblock_link(hai);
+		if (hai->home_block & NEMO_FWD_BLOCK)
+			xfrm_unblock_fwd(hai);
 	}
 	/* check if XFRM policies and states have already been cleaned up */
 	if (IN6_ARE_ADDR_EQUAL(&bule->hoa, &bule->coa))
@@ -2058,6 +2183,50 @@ void xfrm_unblock_hoa(struct home_addr_info *hai)
 	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
 	hai->ha_list.if_block = 0;
 	hai->home_block &= ~HOME_ADDR_BLOCK;
+}
+
+/* block all RA messages sent by MR */
+int xfrm_block_ra(struct home_addr_info *hai)
+{
+	int ret = 0;
+	struct xfrm_selector sel;
+	hai->home_block |= NEMO_RA_BLOCK;
+	set_selector(&in6addr_any, &in6addr_any, IPPROTO_ICMPV6,
+		     ND_ROUTER_ADVERT, 0, 0, &sel);
+	if ((ret = xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_OUT, XFRM_POLICY_BLOCK,
+				   MIP6_PRIO_HOME_BLOCK, NULL, 0)))
+		return ret;
+	return ret;
+}
+
+void xfrm_unblock_ra(struct home_addr_info *hai)
+{
+	struct xfrm_selector sel;
+	set_selector(&in6addr_any, &in6addr_any, IPPROTO_ICMPV6,
+		     ND_ROUTER_ADVERT, 0, 0, &sel);
+	xfrm_mip_policy_del(&sel, XFRM_POLICY_OUT);
+	hai->home_block &= ~NEMO_RA_BLOCK;
+}
+
+/* block all forwarded packets */
+int xfrm_block_fwd(struct home_addr_info *hai)
+{
+	int ret = 0;
+	struct xfrm_selector sel;
+	hai->home_block |= NEMO_FWD_BLOCK;
+	set_selector(&in6addr_any, &in6addr_any, 0, 0, 0, 0, &sel);
+	if ((ret = xfrm_mip_policy_add(&sel, 0, XFRM_POLICY_FWD, XFRM_POLICY_BLOCK,
+				   MIP6_PRIO_HOME_BLOCK, NULL, 0)))
+		return ret;
+	return ret;
+}
+
+void xfrm_unblock_fwd(struct home_addr_info *hai)
+{
+	struct xfrm_selector sel;
+	set_selector(&in6addr_any, &in6addr_any, 0, 0, 0, 0, &sel);
+	xfrm_mip_policy_del(&sel, XFRM_POLICY_FWD);
+	hai->home_block &= ~NEMO_FWD_BLOCK;
 }
 
 int mn_ipsec_recv_bu_tnl_pol_add(struct bulentry *bule, int ifindex, 

@@ -678,6 +678,17 @@ static int bcache_vt_dump(void *data, void *arg)
 
 	fprintf(vh->vh_stream, "\n");
 
+	/* Dump the registered MNP */
+	{
+		struct list_head *l;
+		list_for_each(l, &bce->mob_net_prefixes) {
+			struct prefix_list_entry *p;
+			p = list_entry(l, struct prefix_list_entry, list);
+			fprintf(vh->vh_stream, " MNP: %x:%x:%x:%x:%x:%x:%x:%x/%d\n", 
+                    NIP6ADDR(&p->ple_prefix), p->ple_plen);
+		}
+	}
+
 	return 0;
 }
 

@@ -107,6 +107,23 @@ int default_max_binding_life(const struct in6_addr *remote_hoa,
 	return 0;
 }
 
+static inline int
+policy_check_mob_net_prefix(const struct policy_bind_acl_entry *acl,
+			    const struct ip6_mh_binding_update *bu,
+			    const struct mh_options *opts)
+{
+	struct ip6_mh_opt_mob_net_prefix *op;
+	for (op = mh_opt(&bu->ip6mhbu_hdr, opts, IP6_MHOPT_MOB_NET_PRFX);
+	     op != NULL;
+	     op = mh_opt_next(&bu->ip6mhbu_hdr, opts, op)) {
+		if (!prefix_list_get(&acl->mob_net_prefixes,
+				     &op->ip6mnp_prefix,
+				     op->ip6mnp_prefix_len))
+			return IP6_MH_BAS_NOT_AUTH_FOR_PRFX;
+	}
+	return IP6_MH_BAS_ACCEPTED;
+}
+
 /**
  * default_discard_binding - check for discard policy
  * @remote_hoa: remote MN's home address
@@ -127,10 +144,20 @@ int default_discard_binding(const struct in6_addr *remote_hoa,
 	int ret = def_bind_policy;
 	struct policy_bind_acl_entry *acl;
 
+	if (bu->ip6mhbu_flags & IP6_MH_BU_MR && !conf.HaAcceptMobRtr)
+		return IP6_MH_BAS_MR_OP_NOT_PERMITTED;
+
 	pthread_rwlock_rdlock(&policy_lock);
 	acl = hash_get(&policy_bind_acl_hash, NULL, remote_hoa);
 	if (acl != NULL) {
 		ret = acl->bind_policy;
+		if (ret < IP6_MH_BAS_UNSPECIFIED &&
+		    bu->ip6mhbu_flags & IP6_MH_BU_MR) {
+			struct mh_options opts;
+			mh_opt_parse(&bu->ip6mhbu_hdr, len,
+				     sizeof(*bu), &opts);
+			ret = policy_check_mob_net_prefix(acl, bu, &opts);
+		}
 	}
 	pthread_rwlock_unlock(&policy_lock);
 	return ret;
@@ -225,6 +252,42 @@ int default_best_ro_coa(const struct in6_addr *hoa,
 			struct in6_addr *coa)
 {
 	return 0;
+}
+
+int default_get_mnp_count(const struct in6_addr *hoa)
+{
+	int ret = 0;
+	struct policy_bind_acl_entry *acl;
+	pthread_rwlock_rdlock(&policy_lock);
+	acl = hash_get(&policy_bind_acl_hash, NULL, hoa);
+	if (acl != NULL)
+		ret = acl->mnp_count;
+	pthread_rwlock_unlock(&policy_lock);
+	return ret;
+
+}
+
+int default_get_mnps(const struct in6_addr *hoa,
+		     const int mnp_count,
+		     struct nd_opt_prefix_info *mnps)
+{
+	int i = 0;
+	struct policy_bind_acl_entry *acl;
+
+	pthread_rwlock_rdlock(&policy_lock);
+	acl = hash_get(&policy_bind_acl_hash, NULL, hoa);
+	if (acl != NULL) {
+		struct list_head *l;
+		list_for_each(l, &acl->mob_net_prefixes) {
+			struct prefix_list_entry *e;
+			if (i >= mnp_count)
+				break;
+			e = list_entry(l, struct prefix_list_entry, list);
+			mnps[i++] = e->pinfo;
+		}
+	}
+	pthread_rwlock_unlock(&policy_lock);
+	return i;
 }
 
 static int policy_bind_acle_cleanup(void *data, void *arg)

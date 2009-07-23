@@ -212,6 +212,7 @@ static void conf_default(struct mip6_config *c)
 	INIT_LIST_HEAD(&c->home_addrs);
 	c->MoveModulePath = NULL; /* internal */
 	c->DoRouteOptimizationMN = 1;
+	c->MobRtrUseExplicitMode = 1;
 	c->SendMobPfxSols = 1;
 	c->OptimisticHandoff = 0;
 
@@ -221,6 +222,7 @@ static void conf_default(struct mip6_config *c)
 	c->MaxMobPfxAdvInterval = 86400; /* seconds */
 	c->MinMobPfxAdvInterval = 600; /* seconds */
 	c->HaMaxBindingLife = MAX_BINDING_LIFETIME;
+	INIT_LIST_HEAD(&c->nemo_ha_served_prefixes);
 
 	/* CN bindings */
 	c->DoRouteOptimizationCN = 1;
@@ -304,6 +306,8 @@ void conf_show(struct mip6_config *c)
 	    CONF_BOOL_STR(c->MnDiscardHaParamProb));
 	dbg("SendMobPfxSols = %s\n", CONF_BOOL_STR(c->SendMobPfxSols));
 	dbg("OptimisticHandoff = %s\n", CONF_BOOL_STR(c->OptimisticHandoff));
+	dbg("MobRtrUseExplicitMode = %s\n",
+	    CONF_BOOL_STR(c->MobRtrUseExplicitMode));
 
 	/* HA options */
 	dbg("SendMobPfxAdvs = %s\n", CONF_BOOL_STR(c->SendMobPfxAdvs));
@@ -312,7 +316,8 @@ void conf_show(struct mip6_config *c)
 	dbg("MaxMobPfxAdvInterval = %u\n", c->MaxMobPfxAdvInterval);
 	dbg("MinMobPfxAdvInterval = %u\n", c->MinMobPfxAdvInterval);
 	dbg("HaMaxBindingLife = %u\n", c->HaMaxBindingLife);
-	
+	dbg("HaAcceptMobRtr = %s\n", CONF_BOOL_STR(c->HaAcceptMobRtr));
+
 	/* CN options */
 	dbg("DoRouteOptimizationCN = %s\n",
 	    CONF_BOOL_STR(c->DoRouteOptimizationCN));

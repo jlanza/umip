@@ -326,7 +326,17 @@ static int mn_send_bu_msg(struct bulentry *bule)
 		free_iov_data(iov, iov_ind);
 		return -ENOMEM;
 	}
-	if (!(bule->flags & IP6_MH_BU_HOME)) {
+	if (bule->flags & IP6_MH_BU_HOME) {
+		struct home_addr_info *hai = bule->home;
+		if (bule->flags & IP6_MH_BU_MR && bu->ip6mhbu_lifetime &&
+		    bule->home->mnp_count > 0 && conf.MobRtrUseExplicitMode &&
+		    mh_create_opt_mob_net_prefix(&iov[iov_ind++],
+						 hai->mnp_count,
+						 &hai->mob_net_prefixes) < 0) {
+			free_iov_data(iov, iov_ind);
+			return -ENOMEM;
+		}
+	} else {
 		if (mh_create_opt_nonce_index(&iov[iov_ind++], bule->rr.ho_ni,
 					      bule->rr.co_ni) ||
 		    mh_create_opt_auth_data(&iov[iov_ind++])) {
@@ -616,6 +626,34 @@ static int mv_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 	return 0;
 }
 
+int nemo_mr_tnl_routes_add(struct home_addr_info *hai, int ifindex)
+{
+	struct list_head *l;
+	struct prefix_list_entry *pe;
+	list_for_each(l, &hai->mob_net_prefixes) {
+		struct prefix_list_entry *p;
+		p = list_entry(l, struct prefix_list_entry, list);
+		if (route_add(ifindex, RT6_TABLE_MIP6, RTPROT_MIP,
+			      0, IP6_RT_PRIO_MIP6_FWD,
+			      &p->ple_prefix, p->ple_plen,
+			      &in6addr_any, 0, NULL) < 0) {
+			pe = p;
+			goto undo;
+		}
+	}
+	return 0;
+undo:
+	list_for_each(l, &hai->mob_net_prefixes) {
+		struct prefix_list_entry *p;
+		p = list_entry(l, struct prefix_list_entry, list);
+		route_del(ifindex, RT6_TABLE_MIP6, IP6_RT_PRIO_MIP6_FWD,
+			  &p->ple_prefix, p->ple_plen, &in6addr_any, 0, NULL);
+		if (p == pe)
+			break;
+	}
+	return -1;
+}
+
 static int mn_tnl_state_add(struct home_addr_info *hai, int ifindex, int all)
 {
 	int err = 0;
@@ -628,12 +666,31 @@ static int mn_tnl_state_add(struct home_addr_info *hai, int ifindex, int all)
 			mn_ro_pol_del(hai, ifindex, all);
 		}
 	}
+	if (hai->mob_rtr &&
+	    (err = nemo_mr_tnl_routes_add(hai, ifindex)) < 0) {
+		route_del(ifindex, RT6_TABLE_MIP6, IP6_RT_PRIO_MIP6_OUT,
+			  &hai->hoa.addr, 128, &in6addr_any, 0, NULL);
+		mn_ro_pol_del(hai, ifindex, all);
+	}
 	return err;
+}
+
+static void nemo_mr_tnl_routes_del(struct home_addr_info *hai, int ifindex)
+{
+	struct list_head *l;
+	list_for_each(l, &hai->mob_net_prefixes) {
+		struct prefix_list_entry *p;
+		p = list_entry(l, struct prefix_list_entry, list);
+		route_del(ifindex, RT6_TABLE_MIP6, IP6_RT_PRIO_MIP6_FWD,
+			  &p->ple_prefix, p->ple_plen, &in6addr_any, 0, NULL);
+	}
 }
 
 static void mn_tnl_state_del(struct home_addr_info *hai, int ifindex, int all)
 {
 	if (hai->home_reg_status != HOME_REG_NONE) {
+		if (hai->mob_rtr)
+			nemo_mr_tnl_routes_del(hai, ifindex);
 		route_del(ifindex, RT6_TABLE_MIP6, IP6_RT_PRIO_MIP6_OUT, 
 			  &hai->hoa.addr, 128, &in6addr_any, 0, NULL);
 		mn_ro_pol_del(hai, ifindex, all);
@@ -674,7 +731,8 @@ static int process_first_home_bu(struct bulentry *bule,
 {
 	int err = 0;
 	bule->type = BUL_ENTRY;
-	bule->flags = IP6_MH_BU_HOME | IP6_MH_BU_ACK | hai->lladdr_comp;
+	bule->flags = (IP6_MH_BU_HOME | IP6_MH_BU_ACK |
+		       hai->lladdr_comp | hai->mob_rtr);
 	if (conf.UseMnHaIPsec && conf.KeyMngMobCapability)
 		bule->flags |= IP6_MH_BU_KEYM;
 	bule->coa_changed = -1;
@@ -1088,6 +1146,18 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 	if (bule->flags & IP6_MH_BU_HOME) {
 		struct home_addr_info *hai = bule->home;
 		struct ip6_mh_opt_refresh_advice *bra;
+
+		if (bule->flags & IP6_MH_BU_MR &&
+		    !(ba->ip6mhba_flags & IP6_MH_BA_MR)) {
+			if (hai->use_dhaad) {
+				mn_change_ha(hai);
+			} else {
+				int one = 1;
+				bul_iterate(&hai->bul, mn_dereg, &one);
+			}
+			pthread_rwlock_unlock(&mn_lock);
+			return;
+		}
 		if (!tsisset(ba_lifetime)) {
 			int type = FLUSH_FAILED;
 			mn_dereg_home(hai);
@@ -1271,12 +1341,73 @@ static int flag_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 	return 0;
 }
 
+static void nemo_mr_rules_del(struct home_addr_info *hinfo)
+{
+	struct list_head *l;
+
+	list_for_each(l, &hinfo->mob_net_prefixes) {
+		struct prefix_list_entry *p = NULL;
+		p = list_entry(l, struct prefix_list_entry, list);
+		rule_del(NULL, RT6_TABLE_MIP6,
+			 IP6_RULE_PRIO_MIP6_FWD, RTN_UNICAST,
+			 &p->ple_prefix, p->ple_plen, &in6addr_any, 0, 0);
+		rule_del(NULL, RT6_TABLE_MAIN,
+			 IP6_RULE_PRIO_MIP6_MNP_IN, RTN_UNICAST,
+			 &in6addr_any, 0, &p->ple_prefix, p->ple_plen, 0);
+	}
+}
+
+static int nemo_mr_rules_add(struct home_addr_info *hinfo)
+{
+	struct prefix_list_entry *pe = NULL;
+	struct list_head *l;
+
+	list_for_each(l, &hinfo->mob_net_prefixes) {
+		struct prefix_list_entry *p = NULL;
+		p = list_entry(l, struct prefix_list_entry, list);
+		if (rule_add(NULL, RT6_TABLE_MAIN,
+			     IP6_RULE_PRIO_MIP6_MNP_IN, RTN_UNICAST,
+			     &in6addr_any, 0,
+			     &p->ple_prefix, p->ple_plen, 0) < 0) {
+			pe = p;
+			goto undo;
+		}
+		if (rule_add(NULL, RT6_TABLE_MIP6,
+			     IP6_RULE_PRIO_MIP6_FWD, RTN_UNICAST,
+			     &p->ple_prefix, p->ple_plen,
+			     &in6addr_any, 0, 0) < 0) {
+			rule_del(NULL, RT6_TABLE_MAIN,
+				 IP6_RULE_PRIO_MIP6_MNP_IN, RTN_UNICAST,
+				 &in6addr_any, 0, &p->ple_prefix, p->ple_plen, 0);
+			pe = p;
+			goto undo;
+		}
+	}
+	return 0;
+undo:
+	list_for_each(l, &hinfo->mob_net_prefixes) {
+		struct prefix_list_entry *p = NULL;
+		p = list_entry(l, struct prefix_list_entry, list);
+		rule_del(NULL, RT6_TABLE_MIP6,
+			 IP6_RULE_PRIO_MIP6_FWD,  RTN_UNICAST,
+			 &p->ple_prefix, p->ple_plen, &in6addr_any, 0, 0);
+		rule_del(NULL, RT6_TABLE_MAIN,
+			 IP6_RULE_PRIO_MIP6_MNP_IN, RTN_UNICAST,
+			 &in6addr_any, 0, &p->ple_prefix, p->ple_plen, 0);
+		if (p == pe)
+			break;
+	}
+	return -1;
+}
+
 static void clean_home_addr_info(struct home_addr_info *hai)
 {
 	struct flag_hoa_args arg;
 	int plen = (hai->hoa.iif == hai->if_tunnel ? 128 : hai->plen);
 
 	list_del(&hai->list);
+	if (hai->mob_rtr)
+		nemo_mr_rules_del(hai);
 	arg.target = hai;
 	arg.flag = 0;
 	addr_do(&hai->hoa.addr, plen,
@@ -1330,13 +1461,23 @@ static struct home_addr_info *hai_copy(struct home_addr_info *conf_hai)
 
 		if (pthread_mutex_init(&hai->ha_list.c_lock, NULL))
 			goto undo;
+
+		INIT_LIST_HEAD(&hai->mob_net_prefixes);
+		if (hai->mob_rtr &&
+		    prefix_list_copy(&conf_hai->mob_net_prefixes,
+				     &hai->mob_net_prefixes) < 0)
+			goto mutex_undo;
+
 		INIT_LIST_HEAD(&hai->ro_policies);
 		if (rpl_copy(&conf_hai->ro_policies, &hai->ro_policies) < 0)
-			goto mutex_undo;
+			goto mnp_undo;
+
 		INIT_LIST_HEAD(&hai->ha_list.tqe.list);
 		INIT_LIST_HEAD(&hai->ha_list.home_agents);
 	}
 	return hai;
+mnp_undo:
+	prefix_list_free(&hai->mob_net_prefixes);
 mutex_undo:
 	pthread_mutex_destroy(&hai->ha_list.c_lock);
 undo:
@@ -1357,6 +1498,15 @@ static int conf_home_addr_info(struct home_addr_info *conf_hai)
 	if  ((hai = hai_copy(conf_hai)) == NULL)
 		goto err;
 
+	if (hai->mob_rtr) {
+		MDBG("is Mobile Router\n");
+		list_for_each(list, &hai->mob_net_prefixes) {
+			struct prefix_list_entry *p;
+			p = list_entry(list, struct prefix_list_entry, list);
+			MDBG("Mobile Network Prefix %x:%x:%x:%x:%x:%x:%x:%x/%d\n",
+			     NIP6ADDR(&p->ple_prefix), p->ple_plen);
+		}
+	}
 	if (IN6_IS_ADDR_UNSPECIFIED(&hai->ha_addr)) {
 		hai->use_dhaad = 1;
 	} else {
@@ -1398,6 +1548,9 @@ static int conf_home_addr_info(struct home_addr_info *conf_hai)
 
 	if (addr_do(&hai->hoa.addr, 128,
 		    hai->if_tunnel, &arg, flag_hoa) < 0) {
+		goto clean_err;
+	}
+	if (hai->mob_rtr && nemo_mr_rules_add(hai) < 0) {
 		goto clean_err;
 	}
 	hai->at_home = hai->hoa.iif == hai->if_home;

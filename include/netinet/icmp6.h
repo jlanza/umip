@@ -27,7 +27,13 @@ struct mip_dhaad_req {		/* Dynamic HA Address Discovery */
 #define mip_dhreq_code			mip_dhreq_hdr.icmp6_code
 #define mip_dhreq_cksum			mip_dhreq_hdr.icmp6_cksum
 #define mip_dhreq_id			mip_dhreq_hdr.icmp6_data16[0]
-#define mip_dhreq_reserved		mip_dhreq_hdr.icmp6_data16[1]
+#define mip_dhreq_flags_reserved	mip_dhreq_hdr.icmp6_data16[1]
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP_DHREQ_FLAG_SUPPORT_MR	0x8000
+#else				/* BYTE_ORDER == LITTLE_ENDIAN */
+#define MIP_DHREQ_FLAG_SUPPORT_MR	0x0080
+#endif
 #endif
 
 #ifndef HAVE_STRUCT_MIP_DHAAD_REP
@@ -40,7 +46,13 @@ struct mip_dhaad_rep {		/* HA Address Discovery Reply */
 #define mip_dhrep_code			mip_dhrep_hdr.icmp6_code
 #define mip_dhrep_cksum			mip_dhrep_hdr.icmp6_cksum
 #define mip_dhrep_id			mip_dhrep_hdr.icmp6_data16[0]
-#define mip_dhrep_reserved		mip_dhrep_hdr.icmp6_data16[1]
+#define mip_dhrep_flags_reserved	mip_dhrep_hdr.icmp6_data16[1]
+
+#if BYTE_ORDER == BIG_ENDIAN
+#define MIP_DHREP_FLAG_SUPPORT_MR	0x8000
+#else				/* BYTE_ORDER == LITTLE_ENDIAN */
+#define MIP_DHREP_FLAG_SUPPORT_MR	0x0080
+#endif
 #endif
 
 #ifndef HAVE_STRUCT_MIP_PREFIX_SOLICIT
@@ -89,10 +101,20 @@ struct mip_prefix_advert {	/* Mobile Prefix Adverisements */
 struct nd_opt_homeagent_info {	/* Home Agent information */
 	uint8_t		nd_opt_hai_type;
 	uint8_t		nd_opt_hai_len;
-	uint16_t	nd_opt_hai_reserved;
+	uint16_t	nd_opt_hai_flags_reserved;
 	uint16_t	nd_opt_hai_preference;
 	uint16_t	nd_opt_hai_lifetime;
 };
+#endif
+
+#define nd_opt_hai_reserved     nd_opt_hai_flags_reserved
+
+#ifndef ND_OPT_HAI_FLAG_SUPPORT_MR
+#if BYTE_ORDER == BIG_ENDIAN
+#define ND_OPT_HAI_FLAG_SUPPORT_MR	0x8000
+#else				/* BYTE_ORDER == LITTLE_ENDIAN */
+#define ND_OPT_HAI_FLAG_SUPPORT_MR	0x0080
+#endif
 #endif
 
 #endif	/* netinet/icmp6.h */

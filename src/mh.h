@@ -10,7 +10,7 @@
 
 /* If new types or options appear, these should be updated. */
 #define IP6_MH_TYPE_MAX IP6_MH_TYPE_BERROR
-#define IP6_MHOPT_MAX IP6_MHOPT_BAUTH
+#define IP6_MHOPT_MAX IP6_MHOPT_MOB_NET_PRFX
 
 struct in6_addr_bundle {
 	struct in6_addr *src;
@@ -73,6 +73,11 @@ int mh_create_opt_nonce_index(struct iovec *iov, uint16_t home_nonce,
 			      uint16_t coa_nonce);
 
 int mh_create_opt_auth_data(struct iovec *iov);
+
+struct list_head;
+
+int mh_create_opt_mob_net_prefix(struct iovec *iov, int mnp_count,
+				 struct list_head *mnps);
 
 static inline void *mh_opt(const struct ip6_mh *mh,
 			   const struct mh_options *mh_opts, uint8_t type)

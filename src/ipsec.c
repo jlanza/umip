@@ -81,7 +81,9 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 		    struct ipsec_policy_entry *e,
 		    int dir,
 		    const struct in6_addr *in6_dst,
+		    int  dst_len,
 		    const struct in6_addr *in6_src,
+		    int src_len,
 		    int ifindex,
 		    int nodetype)
 {
@@ -97,10 +99,13 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 	sp->action = e->action;
 	memcpy(&sp->sel.saddr.a6, in6_src, sizeof(sp->sel.saddr.a6));
 	memcpy(&sp->sel.daddr.a6, in6_dst, sizeof(sp->sel.daddr.a6));
-	sp->sel.prefixlen_s = IN6_ARE_ADDR_EQUAL(in6_src, &in6addr_any) ?
-				0 : 128;
-	sp->sel.prefixlen_d = IN6_ARE_ADDR_EQUAL(in6_dst, &in6addr_any) ?
-				0 : 128;
+	sp->sel.prefixlen_s = src_len;
+	if (!src_len && (!IN6_ARE_ADDR_EQUAL(in6_src, &in6addr_any)))
+		sp->sel.prefixlen_s = 128;
+	sp->sel.prefixlen_d = dst_len;
+	if (!dst_len && (!IN6_ARE_ADDR_EQUAL(in6_dst, &in6addr_any)))
+		sp->sel.prefixlen_d = 128;
+
 	sp->sel.ifindex = 0;
 
 	switch (e->type) {
@@ -347,6 +352,7 @@ struct ha_ipsec_tnl_update {
 	int tunnel;
 	struct in6_addr coa;
 	struct in6_addr old_coa;
+	struct list_head *mnp;
 };
 
 /*
@@ -365,6 +371,7 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	int ifindex;
 	const struct in6_addr *oldcoa, *newcoa;
 	const struct in6_addr *peer_addr = hoa;
+	struct list_head *mnp;
 	u_int8_t ipsec_proto;
 	struct xfrm_user_tmpl tmpl;
 	struct xfrm_userpolicy_info sp;
@@ -399,13 +406,14 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	oldcoa = IN6_ARE_ADDR_EQUAL(&info->old_coa, &in6addr_any) ?
 		peer_addr : &info->old_coa;
 	newcoa = &info->coa;
+	mnp = info->mnp;
 
 	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, oldcoa, newcoa);
 
 	/* inbound */
 	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, oldcoa, e->reqid_toha);
-	_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, hoa,
+	_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, 0, hoa, 0,
 		ifindex, MIP6_ENTITY_HA);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
 		dbg("migrate for INBOUND policy failed\n");
@@ -415,7 +423,7 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	/* forward */
 	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, oldcoa, e->reqid_toha);
-	_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, hoa,
+	_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, 0, hoa, 0,
 		ifindex, MIP6_ENTITY_HA);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
 		dbg("migrate for FORWARD policy failed\n");
@@ -425,11 +433,54 @@ static int _ha_tnl_update(const struct in6_addr *haaddr,
 	/* outbound */
 	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
 		  oldcoa, haaddr, e->reqid_tomn);
-	_set_sp(&sp, e, XFRM_POLICY_OUT, hoa, &in6addr_any,
+	_set_sp(&sp, e, XFRM_POLICY_OUT, hoa, 0, &in6addr_any, 0,
 		ifindex, MIP6_ENTITY_HA);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
 		dbg("migrate for OUTBOUND policy failed\n");
         	goto end;
+	}
+
+	/* Mobile router case */
+	if ( (e->type == IPSEC_POLICY_TYPE_TUNNELPAYLOAD) && mnp)
+	{
+		struct list_head *list;
+
+		/* We have to modify rules to protect traffic to and from MNP's, the same way as HoA */
+		list_for_each(list, mnp)
+		{
+			struct prefix_list_entry *p;
+			p = list_entry(list, struct prefix_list_entry, list);
+
+			/* inbound */
+			_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+				  haaddr, oldcoa, e->reqid_toha);
+			_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, 0, &p->ple_prefix, p->ple_plen,
+				ifindex, MIP6_ENTITY_HA);
+			if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
+				dbg("migrate for INBOUND policy failed\n");
+        			goto end;
+			}
+
+			/* forward */
+			_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+				  haaddr, oldcoa, e->reqid_toha);
+			_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, 0, &p->ple_prefix, p->ple_plen,
+				ifindex, MIP6_ENTITY_HA);
+			if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
+				dbg("migrate for FORWARD policy failed\n");
+				goto end;
+			}
+
+			/* outbound */
+			_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+				  oldcoa, haaddr, e->reqid_tomn);
+			_set_sp(&sp, e, XFRM_POLICY_OUT, &p->ple_prefix, p->ple_plen, &in6addr_any, 0,
+				ifindex, MIP6_ENTITY_HA);
+			if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
+				dbg("migrate for OUTBOUND policy failed\n");
+        			goto end;
+			}
+		}
 	}
 
  end:
@@ -440,13 +491,176 @@ int ha_ipsec_tnl_update(const struct in6_addr *haaddr,
 			const struct in6_addr *hoa,
 			const struct in6_addr *coa,
 			const struct in6_addr *old_coa,
-			int tunnel)
+			int tunnel,
+			struct list_head *mnp)
 {
 	struct ha_ipsec_tnl_update b;
 	b.coa = *coa;
 	b.old_coa = *old_coa;
 	b.tunnel = tunnel;
+	b.mnp = mnp;
 	return ipsec_policy_apply(haaddr, hoa, _ha_tnl_update, &b);
+}
+
+struct ha_ipsec_mnp_update {
+	int tunnel;
+	struct list_head *old_mnps;
+	struct list_head *new_mnps;
+};
+
+/*
+ *   Add/Delete MNP IPsec Security Policy
+ */
+static int _ha_mnp_pol_mod(const struct in6_addr *haaddr,
+			   const struct in6_addr *hoa,
+			   struct ipsec_policy_entry *e,
+			   void *arg,
+			   int add)
+{
+	int err = 0;
+	struct ha_ipsec_mnp_update *parms = (struct ha_ipsec_mnp_update *)arg;
+	struct xfrm_userpolicy_info sp;
+	struct xfrm_user_tmpl tmpl;
+	u_int16_t ipsec_proto;
+	struct list_head *list, *old_mnps, *new_mnps, *main_mnps, *ref_mnps;
+	int ifindex;
+
+	assert(haaddr);
+	assert(hoa);
+	assert(e);
+	assert(arg);
+
+	ifindex = parms->tunnel;
+	old_mnps = parms->old_mnps;
+	new_mnps = parms->new_mnps;
+
+	if (e->type != IPSEC_POLICY_TYPE_TUNNELPAYLOAD)
+		goto end;
+
+	/* XXX Limitation: Single IPsec proto can only be applied */
+	if (ipsec_use_esp(e))
+		ipsec_proto = IPPROTO_ESP;
+	else if (ipsec_use_ah(e))
+		ipsec_proto = IPPROTO_AH;
+	else if (ipsec_use_ipcomp(e))
+		ipsec_proto = IPPROTO_COMP;
+	else {
+		dbg("invalid ipsec proto\n");
+		goto end;
+	}
+
+	/* Reverse the search logic on lists based on expected
+	 * action (add/del) */
+	main_mnps = add ? new_mnps : old_mnps;
+	ref_mnps = add ? old_mnps : new_mnps;
+
+	if (main_mnps == NULL)
+		goto end;
+
+	/* We have to add/delete rules to protect traffic to
+	   and from MNP's, the same way as HoA */
+	list_for_each(list, main_mnps) {
+		struct prefix_list_entry *p;
+		p = list_entry(list, struct prefix_list_entry, list);
+
+		if (ref_mnps &&
+		    prefix_list_find(ref_mnps, &p->ple_prefix, p->ple_plen))
+			continue;
+
+		/* inbound */
+		_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, 0, &p->ple_prefix, p->ple_plen,
+			ifindex, MIP6_ENTITY_HA);
+		_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+			  haaddr, hoa, e->reqid_toha);
+		if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
+			dbg("modifying INBOUND policy failed\n");
+			err = -1;
+			goto end;
+		}
+
+		/* forward */
+		_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, 0, &p->ple_prefix, p->ple_plen,
+			ifindex, MIP6_ENTITY_HA);
+		_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+			  haaddr, hoa, e->reqid_toha);
+		if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
+			dbg("modifying FORWARD policy failed\n");
+			err = -1;
+			goto end;
+		}
+
+		/* outbound */
+		_set_sp(&sp, e, XFRM_POLICY_OUT, &p->ple_prefix, p->ple_plen, &in6addr_any, 0,
+			ifindex, MIP6_ENTITY_HA);
+		_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+			  hoa, haaddr, e->reqid_tomn);
+		if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
+			dbg("modifying OUTBOUND policy failed\n");
+			err = -1;
+			goto end;
+		}
+	}
+
+ end:
+	return err;
+}
+
+
+/*
+ *   Add SP entry (for MNP on HA)
+ *
+ *   NOTE:
+ *   - This is a hook routine to ipsec_policy_apply()
+ */
+static int _ha_mnp_pol_add(const struct in6_addr *haaddr,
+			   const struct in6_addr *hoa,
+			   struct ipsec_policy_entry *e,
+			   void *arg)
+{
+	return _ha_mnp_pol_mod(haaddr, hoa, e, arg, 1);
+}
+
+int ha_ipsec_mnp_pol_add(const struct in6_addr *our_addr,
+			 const struct in6_addr *peer_addr,
+			 struct list_head *old_mnps,
+			 struct list_head *new_mnps,
+			 int tunnel)
+{
+	struct ha_ipsec_mnp_update b;
+	b.tunnel = tunnel;
+	b.old_mnps = old_mnps;
+	b.new_mnps = new_mnps;
+
+	return ipsec_policy_apply(our_addr, peer_addr, _ha_mnp_pol_add, &b);
+}
+
+/*
+ *   Delete SP entry (for MNP on HA)
+ *
+ *   NOTE:
+ *   - This is a hook routine to ipsec_policy_apply()
+ */
+static int _ha_mnp_pol_del(const struct in6_addr *haaddr,
+			   const struct in6_addr *hoa,
+			   struct ipsec_policy_entry *e,
+			   void *arg)
+{
+	return _ha_mnp_pol_mod(haaddr, hoa, e, arg, 0);
+}
+
+int ha_ipsec_mnp_pol_del(const struct in6_addr *our_addr,
+			 const struct in6_addr *peer_addr,
+			 struct list_head *old_mnps,
+			 struct list_head *new_mnps,
+			 int tunnel)
+{
+	struct ha_ipsec_mnp_update b;
+	b.tunnel = tunnel;
+	b.old_mnps = old_mnps;
+	b.new_mnps = new_mnps;
+
+	return ipsec_policy_apply(our_addr, peer_addr,
+				  _ha_mnp_pol_del, &b);
 }
 
 /*
@@ -459,7 +673,9 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 			   int add)
 {
 	int err = 0;
-	int ifindex = *(int *)arg;
+	struct ha_ipsec_tnl_update *parms = (struct ha_ipsec_tnl_update *)arg;
+	int ifindex;
+	struct list_head *mnp;
 	struct xfrm_userpolicy_info sp;
 	struct xfrm_user_tmpl tmpl;
 	u_int16_t ipsec_proto;
@@ -468,6 +684,9 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 	assert(hoa);
 	assert(e);
 	assert(arg);
+
+	ifindex = parms->tunnel;
+	mnp = parms->mnp;
 
 	switch (e->type) {
 	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
@@ -493,7 +712,7 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, NULL, NULL);
 
 	/* inbound */
-	_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, hoa,
+	_set_sp(&sp, e, XFRM_POLICY_IN, &in6addr_any, 0, hoa, 0,
 		ifindex, MIP6_ENTITY_HA);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, hoa, e->reqid_toha);
@@ -504,7 +723,7 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 	}
 
 	/* forward */
-	_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, hoa,
+	_set_sp(&sp, e, XFRM_POLICY_FWD, &in6addr_any, 0, hoa, 0,
 		ifindex, MIP6_ENTITY_HA);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, hoa, e->reqid_toha);
@@ -515,7 +734,7 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 	}
 
 	/* outbound */
-	_set_sp(&sp, e, XFRM_POLICY_OUT, hoa, &in6addr_any,
+	_set_sp(&sp, e, XFRM_POLICY_OUT, hoa, 0, &in6addr_any, 0,
 		ifindex, MIP6_ENTITY_HA);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  hoa, haaddr, e->reqid_tomn);
@@ -525,6 +744,16 @@ static int _ha_tnl_pol_mod(const struct in6_addr *haaddr,
 		goto end;
 	}
 
+	/* Mobile Router case */
+	if ((e->type == IPSEC_POLICY_TYPE_TUNNELPAYLOAD) && mnp) {
+		struct ha_ipsec_mnp_update b;
+
+		b.tunnel = ifindex;
+		b.old_mnps = add ? NULL : mnp;
+		b.new_mnps = add ? mnp : NULL;
+
+		err = _ha_mnp_pol_mod(haaddr, hoa, e, (void *)&b, add);
+	}
  end:
 	return err;
 }
@@ -545,11 +774,14 @@ static int _ha_tnl_pol_add(const struct in6_addr *haaddr,
 
 int ha_ipsec_tnl_pol_add(const struct in6_addr *our_addr, 
 			 const struct in6_addr *peer_addr,
-			 int tunnel)
+			 int tunnel,
+			 struct list_head *mnp)
 {
-	int t = tunnel;
+	struct ha_ipsec_tnl_update b;
+	b.tunnel = tunnel;
+	b.mnp = mnp;
 
-	return ipsec_policy_apply(our_addr, peer_addr, _ha_tnl_pol_add, &t);
+	return ipsec_policy_apply(our_addr, peer_addr, _ha_tnl_pol_add, &b);
 }
 
 /*
@@ -568,12 +800,15 @@ static int _ha_tnl_pol_del(const struct in6_addr *haaddr,
 
 int ha_ipsec_tnl_pol_del(const struct in6_addr *our_addr, 
 			 const struct in6_addr *peer_addr,
-			 int tunnel)
+			 int tunnel,
+			 struct list_head *mnp)
 {
-	int t = tunnel;
+	struct ha_ipsec_tnl_update b;
+	b.tunnel = tunnel;
+	b.mnp = mnp;
 
 	return ipsec_policy_apply(our_addr, peer_addr,
-				  _ha_tnl_pol_del, &t);
+				  _ha_tnl_pol_del, &b);
 }
 
 /*
@@ -631,7 +866,7 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 	/* outbound */
 	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, oldcoa, e->reqid_toha);
-	_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, hoa,
+	_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, 0, hoa, 0,
 		ifindex, MIP6_ENTITY_MN);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
 		dbg("migrate for OUTBOUND policy failed\n");
@@ -641,7 +876,7 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 	/* inbound */
 	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
 		  oldcoa, haaddr, e->reqid_tomn);
-	_set_sp(&sp, e, XFRM_POLICY_IN, hoa, &in6addr_any,
+	_set_sp(&sp, e, XFRM_POLICY_IN, hoa, 0, &in6addr_any, 0,
 		ifindex, MIP6_ENTITY_MN);
 	if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
 		dbg("migrate for INBOUND policy (1) failed\n");
@@ -657,7 +892,7 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 		/* template */
 		_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
 			  oldcoa, haaddr, e->reqid_tomn);
-		_set_sp(&sp, e, XFRM_POLICY_IN, hoa, &in6addr_any,
+		_set_sp(&sp, e, XFRM_POLICY_IN, hoa, 0, &in6addr_any, 0,
 			ifindex, MIP6_ENTITY_MN);
 		/* additional settings */
 		sp.priority = MIP6_PRIO_RO_SIG_IPSEC;
@@ -666,6 +901,52 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 		if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
 			dbg("migrate for INBOUND policy (2) failed\n");
 			goto end;
+		}
+	}
+
+	/*
+	 * If we are a Mobile Router, we also need to migrate IN/FWD/OUT rules
+	 * for forwarded traffic in case we have TUNNELPAYLOAD protection.
+	 */
+	if ((e->type == IPSEC_POLICY_TYPE_TUNNELPAYLOAD) && (bule->home->mob_rtr))
+	{
+		struct list_head *mnp;
+
+		list_for_each(mnp, &bule->home->mob_net_prefixes)
+		{
+			struct prefix_list_entry *p;
+			p = list_entry(mnp, struct prefix_list_entry, list);
+
+			/* outbound */
+			_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+				  haaddr, oldcoa, e->reqid_toha);
+			_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, 0, &p->ple_prefix, p->ple_plen,
+				ifindex, MIP6_ENTITY_MN);
+			if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
+				dbg("migrate for OUTBOUND policy failed\n");
+				goto end;
+			}
+
+			/* forwarded */
+			_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+				  oldcoa, haaddr, e->reqid_tomn);
+			_set_sp(&sp, e, XFRM_POLICY_IN, &p->ple_prefix, p->ple_plen, &in6addr_any, 0,
+				ifindex, MIP6_ENTITY_MN);
+			if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
+				dbg("migrate for INBOUND policy (1) failed\n");
+				goto end;
+			}
+
+			/* inbound */
+			_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TUNNEL,
+				  oldcoa, haaddr, e->reqid_tomn);
+			_set_sp(&sp, e, XFRM_POLICY_IN, &p->ple_prefix, p->ple_plen, &in6addr_any, 0,
+				ifindex, MIP6_ENTITY_MN);
+			if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
+				dbg("migrate for INBOUND policy (1) failed\n");
+				goto end;
+			}
+
 		}
 	}
 
@@ -724,7 +1005,7 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, NULL, NULL);
 
 	/* inbound */
-	_set_sp(&sp, e, XFRM_POLICY_IN, hoa, &in6addr_any,
+	_set_sp(&sp, e, XFRM_POLICY_IN, hoa, 0, &in6addr_any, 0,
 		ifindex, MIP6_ENTITY_MN);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  hoa, haaddr, e->reqid_tomn);
@@ -735,7 +1016,7 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 	}
 		
 	/* outbound */
-	_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, hoa,
+	_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, 0, hoa, 0,
 		ifindex, MIP6_ENTITY_MN);
 	_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
 		  haaddr, hoa, e->reqid_toha);
@@ -758,6 +1039,54 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 			mn_ipsec_recv_bu_tnl_pol_del(bule, ifindex, e);
 			/* restore wildrecv SPD entry for processing BU */
 			err = cn_wildrecv_bu_pol_add();
+		}
+	}
+
+	/*
+	 * If we are a Mobile Router, we also need to create IN/FWD/OUT rules
+	 * for forwarded traffic in case we have TUNNELPAYLOAD protection.
+	 */
+	if ((e->type == IPSEC_POLICY_TYPE_TUNNELPAYLOAD) && (bule->home->mob_rtr))
+	{
+		struct list_head *mnp;
+
+		list_for_each(mnp, &bule->home->mob_net_prefixes)
+		{
+			struct prefix_list_entry *p;
+			p = list_entry(mnp, struct prefix_list_entry, list);
+
+			/* inbound */
+			_set_sp(&sp, e, XFRM_POLICY_IN, &p->ple_prefix, p->ple_plen, &in6addr_any, 0,
+				ifindex, MIP6_ENTITY_MN);
+			_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+				  hoa, haaddr, e->reqid_tomn);
+			if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
+				dbg("modifying INBOUND policy failed.\n");
+				err = -1;
+				goto end;
+			}
+
+			/* forward */
+			_set_sp(&sp, e, XFRM_POLICY_FWD, &p->ple_prefix, p->ple_plen, &in6addr_any, 0,
+				ifindex, MIP6_ENTITY_MN);
+			_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+				  hoa, haaddr, e->reqid_tomn);
+			if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
+				dbg("modifying INBOUND policy failed.\n");
+				err = -1;
+				goto end;
+			}
+
+			/* outbound */
+			_set_sp(&sp, e, XFRM_POLICY_OUT, &in6addr_any, 0, &p->ple_prefix, p->ple_plen,
+				ifindex, MIP6_ENTITY_MN);
+			_set_tmpl(&tmpl, AF_INET6, ipsec_proto, XFRM_MODE_TUNNEL,
+				  haaddr, hoa, e->reqid_toha);
+			if (xfrm_ipsec_policy_mod(&sp, &tmpl, 1, add) < 0) {
+				dbg("modifying OUTBOUND policy failed.\n");
+				err = -1;
+				goto end;
+			}
 		}
 	}
 

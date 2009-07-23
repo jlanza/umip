@@ -106,7 +106,7 @@ int proxy_nd_start(int ifindex, struct in6_addr *target,
 {
 	struct in6_addr lladdr;
 	int err;
-	int nd_flags = 0;
+	int nd_flags = bu_flags&IP6_MH_BU_MR ? NTF_ROUTER : 0;
 
 	err = pneigh_add(ifindex, nd_flags, target);
 
@@ -117,7 +117,9 @@ int proxy_nd_start(int ifindex, struct in6_addr *target,
 			pneigh_del(ifindex, target);
 	}
 	if (!err) {
-		uint32_t na_flags = ND_NA_FLAG_OVERRIDE;
+		uint32_t na_flags = (ND_NA_FLAG_OVERRIDE |
+				     nd_flags ? ND_NA_FLAG_ROUTER : 0);
+
 		ndisc_send_na(ifindex, src, &in6addr_all_nodes_mc,
 			      target, na_flags);
 

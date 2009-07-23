@@ -2,6 +2,9 @@ MIPL Mobile IPv6 for Linux
 
   MIPL Mobile IPv6 for Linux is an implementation of the Mobility
   Support in IP version 6 (RFC 3775).
+
+  It also supports Network Mobility with the NEMO Basic Support
+  implementation (RFC 3963).
   
   This user space part works together with Mobile IPv6 enabled Linux
   kernels.  See INSTALL and any other documents referred there for

@@ -86,7 +86,8 @@ static int dhaad_append_candidate(struct ha_candidate_list *t,
 }
 
 static int dhaad_send_request(int oif, struct in6_addr *src, 
-			      struct in6_addr *pfx, int plen)
+			      struct in6_addr *pfx, int plen,
+			      uint16_t flags)
 {
 	struct mip_dhaad_req *ih;
 	struct iovec iov;
@@ -98,6 +99,7 @@ static int dhaad_send_request(int oif, struct in6_addr *src,
 	    return -1;
 	id = dhaad_id++;
 	ih->mip_dhreq_id = htons(id);
+	ih->mip_dhreq_flags_reserved = flags;
 	dhaad_gen_ha_anycast(&dst, pfx, plen);
 	icmp6_send(oif, 0, src, &dst, &iov, 1);
 	free_iov_data(&iov, 1);
@@ -121,7 +123,9 @@ static void dhaad_resend(struct tq_elem *tqe)
 		t->dhaad_id = dhaad_send_request(hai->primary_coa.iif,
 						 &hai->primary_coa.addr,
 						 &hai->home_prefix,
-						 hai->home_plen);
+						 hai->home_plen,
+						 hai->mob_rtr?
+						 MIP_DHREQ_FLAG_SUPPORT_MR:0);
 		t->dhaad_resends++;
 		tsadd(t->dhaad_delay, t->dhaad_delay, t->dhaad_delay);
 		add_task_rel(&t->dhaad_delay, &t->tqe, dhaad_resend);
@@ -139,11 +143,15 @@ static void _dhaad_start(struct home_addr_info *hai, int force)
 	      t->dhaad_resends == DHAAD_RETRIES))) {
 		if (!(hai->home_block & HOME_ADDR_BLOCK))
 			xfrm_block_hoa(hai);
+		if (hai->mob_rtr && !(hai->home_block & NEMO_RA_BLOCK))
+			xfrm_block_ra(hai);
 		t->dhaad_resends = 0;
 		t->dhaad_id = dhaad_send_request(hai->primary_coa.iif,
 						 &hai->primary_coa.addr,
 						 &hai->home_prefix,
-						 hai->home_plen);
+						 hai->home_plen,
+						 hai->mob_rtr?
+						 MIP_DHREQ_FLAG_SUPPORT_MR:0);
 		t->dhaad_delay = INITIAL_DHAAD_TIMEOUT_TS;
 		add_task_rel(&t->dhaad_delay, &t->tqe, dhaad_resend);
 	}
@@ -165,6 +173,8 @@ static void _dhaad_stop(struct home_addr_info *hai)
 	tsclear(t->dhaad_delay);
 	if (hai->home_block & HOME_ADDR_BLOCK)
 		xfrm_unblock_hoa(hai);
+	if (hai->home_block & NEMO_RA_BLOCK)
+		xfrm_unblock_ra(hai);
 }
 
 void dhaad_stop(struct home_addr_info *hai)
@@ -242,6 +252,12 @@ static void dhaad_recv_rep(const struct icmp6_hdr *ih, ssize_t len,
 	pthread_rwlock_wrlock(&mn_lock);
 	if ((hai = mn_get_home_addr_by_dhaadid(id)) == NULL) {
 		dbg("No matching request for dhaad reply\n");
+		pthread_rwlock_unlock(&mn_lock);
+		return;
+	}
+	if (hai->mob_rtr &&
+	    !(rph->mip_dhrep_flags_reserved & MIP_DHREP_FLAG_SUPPORT_MR)) {
+		dbg("HA doesn't support MR\n");
 		pthread_rwlock_unlock(&mn_lock);
 		return;
 	}

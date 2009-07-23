@@ -78,6 +78,7 @@ static int conf_default_ra_defrtr = 1;
 static int conf_default_rs = 3;
 static int conf_default_rs_ival = 4;
 
+static int conf_forwarding = 0;
 static int conf_autoconf = 1;
 static int conf_ra_defrtr = 0;
 static int conf_rs = 0;
@@ -231,8 +232,31 @@ static void md_expire_coa(struct md_inet6_iface *iface, struct md_coa *coa)
 	list_add_tail(&coa->list, &iface->expired_coas);
 }
 
+static void md_reset_egress_forward(void)
+{
+	struct list_head *l;
+	int forward = 0;;
+
+	if (list_empty(&ifaces))
+		return;
+
+	list_for_each(l, &ifaces) {
+		struct md_inet6_iface *i;
+		i = list_entry(l, struct md_inet6_iface, list);
+		forward |= i->home_link;
+	}
+	list_for_each(l, &ifaces) {
+		struct md_inet6_iface *i;
+		i = list_entry(l, struct md_inet6_iface, list);
+		set_iface_proc_entry(PROC_SYS_IP6_FORWARDING,
+				     i->name, forward);
+	}
+}
+
 static void md_reset_home_link(struct md_inet6_iface *i)
 {
+	if (i->home_link)
+		md_reset_egress_forward();
 	i->home_link = 0;
 	i->ll_dad_unsafe = 0;
 }
@@ -648,6 +672,8 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 
 static void iface_proc_entries_init(struct md_inet6_iface *iface)
 {
+	set_iface_proc_entry(PROC_SYS_IP6_FORWARDING, iface->name,
+			     conf_forwarding);
 	set_iface_proc_entry(PROC_SYS_IP6_AUTOCONF, iface->name,
 			     conf_autoconf);
 	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR, iface->name, conf_ra_defrtr);
@@ -878,6 +904,8 @@ static void md_check_home_link(struct md_inet6_iface *i, struct md_router *rtr)
 			ll_dad_unsafe |= hai->lladdr_comp;
 		}
 	}
+	if (i->home_link != home_link)
+		md_reset_egress_forward();
 	i->home_link = home_link;
 	i->ll_dad_unsafe = ll_dad_unsafe;
 }
@@ -1737,6 +1765,8 @@ static void iface_default_proc_entries_cleanup(void)
 
 static void iface_proc_entries_cleanup(struct md_inet6_iface *iface)
 {
+	set_iface_proc_entry(PROC_SYS_IP6_FORWARDING, iface->name,
+			     iface->devconf[DEVCONF_FORWARDING]);
 	set_iface_proc_entry(PROC_SYS_IP6_AUTOCONF, iface->name,
 			     iface->devconf[DEVCONF_AUTOCONF]);
 	set_iface_proc_entry(PROC_SYS_IP6_ACCEPT_RA_DEFRTR, iface->name,

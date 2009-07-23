@@ -17,3 +17,11 @@ Mobile Node issues
 * Multihoming support hasn't been very thoroughly tested and should
   therefore be considered developmental code.  However, it is a lot
   more stable than in the Release Candidates.
+
+NEMO issues
+-----------
+
+* The Mobile Router's home address may only be on the egress interface.
+
+* Dynamic routing protocols between the Home Agent and Mobile Router
+  are not yet supported.

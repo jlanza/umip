@@ -23,6 +23,7 @@ struct home_agent {
 	struct list_head list;
 	struct in6_addr addr;
 	uint16_t preference;
+	uint16_t flags;
 	struct timespec lifetime;
 	struct ha_interface *iface;
 	struct tq_elem tqe;

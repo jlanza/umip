@@ -177,8 +177,8 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 	non_ind = mh_opt(&bu->ip6mhbu_hdr, &mh_opts, IP6_MHOPT_NONCEID);
 	bce = bcache_get(out.src, out.dst);
 	if (bce) {
-		if ((bce->flags^bu_flags) & IP6_MH_BU_HOME) {
-			/* H-bit mismatch, flags changed */
+		if ((bce->flags^bu_flags) & (IP6_MH_BU_HOME|IP6_MH_BU_MR)) {
+			/* H-bit or R-bit mismatch, flags changed */
 			bcache_release_entry(bce);
 			bce = NULL;
 			status = IP6_MH_BAS_REG_NOT_ALLOWED;
@@ -221,9 +221,15 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 			/* else get rid of it */
 			bcache_delete(out.src, out.dst);
 		}
-	} else if (bu_flags & IP6_MH_BU_HOME) {
-		status = IP6_MH_BAS_HA_NOT_SUPPORTED;
-		goto send_nack;
+	} else {
+		if (bu_flags & IP6_MH_BU_HOME) {
+			status = IP6_MH_BAS_HA_NOT_SUPPORTED;
+			goto send_nack;
+		}
+		if (bu_flags & IP6_MH_BU_MR) {
+			status = IP6_MH_BAS_MR_OP_NOT_PERMITTED;
+			goto send_nack;
+		}
 	}
 	status = conf.pmgr.discard_binding(out.dst, out.bind_coa,
 					   out.src, bu, len);

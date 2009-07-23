@@ -15,6 +15,7 @@
 #define MIP6_PRIO_RO_SIG_IPSEC		7	/* XXX: BU between MN-MN with IPsec */
 #define MIP6_PRIO_RO_SIG		8	/* XXX: BU between MN-CN */
 #define MIP6_PRIO_RO_SIG_ANY		9
+#define MIP6_PRIO_MR_LOCAL_DATA_BYPASS	9	/* Bypass rule for local traffic in mobile network */
 #define MIP6_PRIO_RO_SIG_RR		10	/* XXX: MH(or HoTI/HoT) between MN-CN */
 #define MIP6_PRIO_RO_BLOCK		11
 #define MIP6_PRIO_NO_RO_SIG_ANY		12
@@ -87,6 +88,12 @@ void xfrm_unblock_link(struct home_addr_info *hai);
 
 int xfrm_block_hoa(struct home_addr_info *hai);
 void xfrm_unblock_hoa(struct home_addr_info *hai);
+
+int xfrm_block_ra(struct home_addr_info *hai);
+void xfrm_unblock_ra(struct home_addr_info *hai);
+
+int xfrm_block_fwd(struct home_addr_info *hai);
+void xfrm_unblock_fwd(struct home_addr_info *hai);
 
 int ha_mn_ipsec_pol_mod(struct in6_addr *haaddr,
 			struct in6_addr *hoa);

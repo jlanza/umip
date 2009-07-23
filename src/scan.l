@@ -136,6 +136,11 @@ MnRouterProbes			{ return MNROUTERPROBES; }
 MnRouterProbeTimeout		{ return MNROUTERPROBETIMEOUT; }
 MnDiscardHaParamProb		{ return MNDISCARDHAPARAMPROB; }
 OptimisticHandoff		{ return OPTIMISTICHANDOFF; }
+HaAcceptMobRtr   		{ return HAACCEPTMOBRTR; }
+IsMobRtr       			{ return ISMOBRTR; }
+HaServedPrefix       	       	{ return HASERVEDPREFIX; }
+HomePrefix     			{ return HOMEPREFIX; }
+MobRtrUseExplicitMode    	{ return MOBRTRUSEEXPLICITMODE; }
 internal			{ return INTERNAL; }
 
 {addr}		{

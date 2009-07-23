@@ -49,6 +49,8 @@
    further information on how to configure your node.  Also take a
    look at the example configuration files in the extras directory.
 
+   For comments about NEMO check README.NEMO.
+
    For comments about IPsec support check README.IPsec.
 
 5. A startup script 

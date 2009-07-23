@@ -39,6 +39,7 @@
 #include "mh.h"
 #include "cn.h"
 #include "vt.h"
+#include "prefix.h"
 
 #define BCACHE_BUCKETS 32
 
@@ -87,6 +88,38 @@ void dump_bce(void *bce, void *os)
 		NIP6ADDR(&e->our_addr));
 	fprintf(out, " lifetime %ld\n ", e->lifetime.tv_sec);
 	fprintf(out, " seqno %d\n", e->seqno);
+
+	if (e->flags & IP6_MH_BA_MR) {
+		struct list_head *list;
+		int mnpcount = 0;
+
+		/* MR registration type */
+		fprintf(out, "MR Registration type: ");
+		switch(e->nemo_type) {
+		case BCE_NEMO_EXPLICIT:
+			fprintf(out, "explicit.\n");
+			break;
+		case BCE_NEMO_IMPLICIT:
+			fprintf(out, "implicit.\n");
+			break;
+		default:
+			fprintf(out, "unknown.\n");
+		}
+
+		/* Mobile Network prefixes */
+		fprintf(out, "MR Mobile network prefixes: ");
+		list_for_each(list, &e->mob_net_prefixes) {
+			struct prefix_list_entry *p;
+			p = list_entry(list, struct prefix_list_entry, list);
+			if (mnpcount)
+				fprintf(out, "                            ");
+			fprintf(out, "%x:%x:%x:%x:%x:%x:%x:%x/%d\n",
+				NIP6ADDR(&p->ple_prefix), p->ple_plen);
+			mnpcount++;
+		}
+		if (!mnpcount)
+			fprintf(out, " none registered.\n");
+	}
 
 	fflush(out);
 }
@@ -144,6 +177,7 @@ struct bcentry *bcache_alloc(int type)
 		return NULL;
 	}
 	INIT_LIST_HEAD(&tmp->tqe.list);
+	INIT_LIST_HEAD(&tmp->mob_net_prefixes);
 	return tmp;
 }
 
@@ -158,6 +192,7 @@ void bcache_free(struct bcentry *bce)
 	/* This function should really return allocated space to free
 	 * pool. */
 	pthread_rwlock_destroy(&bce->lock);
+	prefix_list_free(&bce->mob_net_prefixes);
 	free(bce);
 }
 
