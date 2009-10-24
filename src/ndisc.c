@@ -336,8 +336,7 @@ int ndisc_send_rs(int ifindex, const struct in6_addr *dst)
 	return ndisc_send_unspec(ND_ROUTER_SOLICIT, ifindex, dst);
 }
 
-int ndisc_send_ns(int ifindex, const struct in6_addr *dst,
-		  const struct in6_addr *target)
+int ndisc_send_ns(int ifindex, const struct in6_addr *target)
 {
 	return ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifindex, target);
 }

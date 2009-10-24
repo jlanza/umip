@@ -1862,7 +1862,6 @@ int mn_lladdr_dad(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 
 static int mn_dad_probe(struct in6_addr *addr, int plen, int ifindex)
 {
-	struct in6_addr solicit;
 	int deleted;
 
 	if (IN6_IS_ADDR_LINKLOCAL(addr))
@@ -1870,9 +1869,8 @@ static int mn_dad_probe(struct in6_addr *addr, int plen, int ifindex)
 
 	/* make sure address isn't configured on interface before
 	   DAD probe or MN will receive reply from itself */
-	ipv6_addr_solict_mult(addr, &solicit);
 	deleted = !addr_del(addr, plen, ifindex);
-	ndisc_send_ns(ifindex, &solicit, addr);
+	ndisc_send_ns(ifindex, addr);
 	return deleted;
 }
 
