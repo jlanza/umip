@@ -2355,12 +2355,6 @@ int mn_movement_event(struct movement_event *event)
 	return 0;
 }
 
-static int mn_set_ro_bule_coa(struct bulentry *e)
-{
-	e->if_coa = mn_get_ro_coa(&e->peer_addr, &e->hoa, &e->coa);
-	return e->if_coa;
-}
-
 /**
  * mn_rr_start_handoff - start RR procedure after changing CoA
  * vbule: bulentry
@@ -2380,7 +2374,8 @@ int mn_rr_start_handoff(void *vbule, void *dummy)
 		bule->dereg = 1;
 		tsclear(bule->lifetime);
 	}
-	if (mn_set_ro_bule_coa(bule) < 0)
+	bule->if_coa = mn_get_ro_coa(&bule->peer_addr, &bule->hoa, &bule->coa);
+	if (bule->if_coa < 0)
 		goto delete_entry;
 
 	bule->do_send_bu = 1;
