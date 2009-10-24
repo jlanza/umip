@@ -370,10 +370,9 @@ static int xfrm_policy_add(uint8_t type, const struct xfrm_selector *sel,
 			   int update, int dir, int action, int priority,
 			   struct xfrm_user_tmpl *tmpls, int num_tmpl)
 {
-	uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_userpolicy_info))
-		    + RTA_SPACE(sizeof(struct xfrm_userpolicy_type))
-		    + RTA_SPACE(sizeof(struct xfrm_user_tmpl)
-				* MIPV6_MAX_TMPLS)];
+	uint8_t buf[NLMSG_SPACE(sizeof(struct xfrm_userpolicy_info)) +
+		    RTA_SPACE(sizeof(struct xfrm_userpolicy_type)) +
+		    RTA_SPACE(sizeof(struct xfrm_user_tmpl) * num_tmpl)];
 	struct nlmsghdr *n;
 	struct xfrm_userpolicy_info *pol;
 	struct xfrm_userpolicy_type ptype;
