@@ -303,6 +303,17 @@ int homeagents_ifall_init(void)
 	return 0;
 }
 
+void ha_discover_routers(void)
+{
+	struct list_head *lp;
+	list_for_each(lp, &ha_interfaces) {
+		struct ha_interface *i;
+		i = list_entry(lp, struct ha_interface, iflist);
+		ndisc_send_rs(i->ifindex, &in6addr_any,
+			      &in6addr_all_routers_mc);
+	}
+}
+
 #ifdef ENABLE_VT
 struct ha_vt_arg {
 	const struct vt_handle *vh;
@@ -1190,6 +1201,7 @@ int ha_init(void)
 		     &in6addr_any, 0, &in6addr_any, 0, 0) < 0)
 		return -1;
 	icmp6_handler_reg(ND_ROUTER_ADVERT, &ha_ra_handler);
+	ha_discover_routers(); /* Let's gather RA */
 	mh_handler_reg(IP6_MH_TYPE_BU, &ha_bu_handler);
 	return 0;
 }
