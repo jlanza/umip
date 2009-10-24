@@ -1033,11 +1033,7 @@ static int rtr_addr_match(struct md_router *r1, struct md_router *r2)
 
 static int md_router_cmp(struct md_router *new, struct md_router *old)
 {
-	/* always compare router prefixes */
-	prefix_list_cmp(&new->prefixes, &old->prefixes);
-
 	/* Neither router nor link-local addresses match; different nodes */
-
 	if (IN6_ARE_ADDR_EQUAL(&new->lladdr, &old->lladdr)) {
 		if (new->raddr_cnt > 0 || old->raddr_cnt > 0)  
 			return !rtr_addr_match(new, old);
