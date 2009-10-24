@@ -418,14 +418,14 @@ int ndisc_do_dad(int ifi, struct in6_addr *addr, int do_ll)
 		dbg("cannot joing slicit node mc\n");
 		goto end;
 	}
-	if (ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifi, addr) <= 0) {
+	if (ndisc_send_ns(ifi, addr) <= 0) {
 		dbg("Error at sending NS\n");
 		goto end;
 	}
 
 	if (do_ll) {
 		ipv6_addr_llocal(addr, &ll);
-		if (ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifi, &ll) <= 0) {
+		if (ndisc_send_ns(ifi, &ll) <= 0) {
 			dbg("Error at sending NS (link-local target)\n");
 			goto end;
 		}
