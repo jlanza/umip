@@ -101,7 +101,7 @@ static int mpd_send_mps(struct mps_entry *e)
 
 	/* no need to worry about network byte order since 
 	   mip_ps_id only serves as an identifier */
-	e->id = ih->mip_ps_id = random();
+	ih->mip_ps_id = e->id;
 	clock_gettime(CLOCK_REALTIME, &e->lastsent);
 	icmp6_send(0, 0, &e->hoa, &e->ha, &iov, 1);
 	free_iov_data(&iov, 1);
@@ -145,6 +145,7 @@ static void mpd_send_first_mps(struct tq_elem *tqe)
 	pthread_mutex_lock(&mps_lock);
 	if (!task_interrupted()) {
 		struct mps_entry *e = tq_data(tqe, struct mps_entry, tqe);
+		e->id = random();
 		mpd_send_mps(e);
 		e->delay = INITIAL_SOLICIT_TIMER_TS;
 		add_task_rel(&e->delay, &e->tqe, mpd_resend_mps);
