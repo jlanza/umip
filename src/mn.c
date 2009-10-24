@@ -1815,10 +1815,8 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	iif = pkt_info.ipi6_ifindex;
 	na = (struct nd_neighbor_advert *)msg;
 
-	if (iif != ifindex || 
-	    hoplimit < 255 || na->nd_na_code != 0 ||
-	    len < sizeof(struct nd_neighbor_advert) ||
-	    IN6_IS_ADDR_MULTICAST(&na->nd_na_target) ||
+	if (iif != ifindex || hoplimit < 255 || len < sizeof(*na) ||
+	    na->nd_na_code != 0 || IN6_IS_ADDR_MULTICAST(&na->nd_na_target) ||
 	    (na->nd_na_flags_reserved & ND_NA_FLAG_SOLICITED &&
 	     IN6_IS_ADDR_MULTICAST(daddr)))
 		return 0;

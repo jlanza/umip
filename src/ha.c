@@ -106,7 +106,8 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 		if (opt[0] == ND_OPT_PREFIX_INFORMATION) {
 			struct nd_opt_prefix_info *p;
 			p = (struct nd_opt_prefix_info *)opt;
-			if (p->nd_opt_pi_prefix_len > 128)
+
+			if (olen < sizeof(*p) || p->nd_opt_pi_prefix_len > 128)
 				return;
 			p->nd_opt_pi_valid_time = 
 				ntohl(p->nd_opt_pi_valid_time);
@@ -119,6 +120,10 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 			   ra->nd_ra_flags_reserved & ND_RA_FLAG_HOME_AGENT) {
 			struct nd_opt_homeagent_info *hainfo;
 			hainfo = (struct nd_opt_homeagent_info *)opt;
+
+			if (olen < sizeof(*hainfo))
+				return;
+
 			pref = ntohs(hainfo->nd_opt_hai_preference);
 			life = ntohs(hainfo->nd_opt_hai_lifetime);
 			flags = hainfo->nd_opt_hai_flags_reserved;
