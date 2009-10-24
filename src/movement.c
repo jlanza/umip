@@ -616,9 +616,6 @@ static inline int md_set_linklocal(struct in6_addr *lladdr,
 		eui[3] = 0xff;
 		eui[4] = 0xfe;
 		break;
-	case ARPHRD_ARCNET:
-		eui[7] = hwa[0];
-		break;
 	default:
 		return -EINVAL;
 	}
