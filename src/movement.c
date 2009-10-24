@@ -1353,17 +1353,15 @@ static void md_change_default_router(struct md_inet6_iface *iface,
 	     NIP6ADDR(&new->lladdr), new->iface->name, new->iface->ifindex);
 
 	list_for_each(l, &new->prefixes) {
-		int new_prefix = 1;
 		struct prefix_list_entry *p;
 
 		p = list_entry(l, struct prefix_list_entry, list);
 
 		if (old && prefix_list_find(&old->prefixes, 
-					    &p->ple_prefix, p->ple_plen)) {
+					    &p->ple_prefix,
+					    p->ple_plen))
 			link_changed = 0;
-			new_prefix = 0;
-		}
-		if (new_prefix)
+		else
 			md_prefix_rule_add(p);
 	}
 	if (old)
