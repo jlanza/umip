@@ -599,30 +599,6 @@ static void __md_new_link(struct md_inet6_iface *iface, int link_changed)
 	md_flush_coa_list(&iface->expired_coas);
 }
 
-static inline int md_set_linklocal(struct in6_addr *lladdr, 
-				   uint8_t *hwa, unsigned short iface_type)
-{
-	memset(lladdr, 0, sizeof(struct in6_addr));
-	uint8_t *eui = lladdr->s6_addr + 8;
-	switch (iface_type) {
-	case ARPHRD_ETHER:
-	case ARPHRD_IEEE802:
-	case ARPHRD_IEEE802_TR:
-	case ARPHRD_IEEE80211:
-	case ARPHRD_FDDI:
-		memcpy(eui, hwa, 3);
-		memcpy(eui + 5, hwa + 3, 3);
-		eui[0] ^= 2;
-		eui[3] = 0xff;
-		eui[4] = 0xfe;
-		break;
-	default:
-		return -EINVAL;
-	}
-	lladdr->s6_addr[0] = 0xfe;
-	lladdr->s6_addr[1] = 0x80;
-	return 0;
-}
 
 static struct md_inet6_iface *
 md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
@@ -640,8 +616,8 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 			iface->hwalen = nd_get_l2addr_len(ifi->ifi_type);
 			memcpy(iface->hwa, RTA_DATA(rta_tb[IFLA_ADDRESS]),
 			       iface->hwalen);
-			md_set_linklocal(&iface->lladdr, 
-					 iface->hwa, iface->type);
+			ndisc_set_linklocal(&iface->lladdr,
+					    iface->hwa, iface->type);
 		}
 		if (rta_tb[IFLA_PROTINFO]) {
 			struct rtattr *inet6_tb[IFLA_INET6_MAX+1];

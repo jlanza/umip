@@ -29,6 +29,38 @@ static inline short nd_get_l2addr_len(unsigned short iface_type)
 	}
 }
 
+/* Based on iface type (iface_type) and associated link-layer
+ * address (hwa), the function generates the modified eui-64
+ * and fills lladdr with associated link-layer address base
+ * on that interface identifier.
+ * The function returns 0 on success, -EINVAL on error. */
+static inline int ndisc_set_linklocal(struct in6_addr *lladdr, uint8_t *hwa,
+				      unsigned short iface_type)
+{
+	memset(lladdr, 0, sizeof(struct in6_addr));
+	uint8_t *eui = lladdr->s6_addr + 8;
+
+	switch (iface_type) {
+	case ARPHRD_ETHER:
+	case ARPHRD_IEEE802:
+	case ARPHRD_IEEE802_TR:
+	case ARPHRD_IEEE80211:
+	case ARPHRD_FDDI:
+		memcpy(eui, hwa, 3);
+		memcpy(eui + 5, hwa + 3, 3);
+		eui[0] ^= 2;
+		eui[3] = 0xff;
+		eui[4] = 0xfe;
+		break;
+	default:
+		return -EINVAL;
+	}
+	lladdr->s6_addr[0] = 0xfe;
+	lladdr->s6_addr[1] = 0x80;
+
+	return 0;
+}
+
 int ndisc_do_dad(int ifi, struct in6_addr *addr, int ll);
 
 int ndisc_send_rs(int ifindex, const struct in6_addr *src,
