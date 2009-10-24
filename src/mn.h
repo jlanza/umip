@@ -84,7 +84,6 @@ struct home_addr_info {
 	int if_tunnel;
 	int if_home;
 	int if_block;
-	short hwalen;
 	uint8_t altcoa;
 	uint16_t mob_rtr;
 	char name[IF_NAMESIZE];

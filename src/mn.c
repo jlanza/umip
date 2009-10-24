@@ -1799,7 +1799,7 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	int len, iif, hoplimit;
 	struct nd_neighbor_advert *na;
 	uint8_t *hwa = NULL;
-	int ret;
+	int ret, hwalen;
 	
 	len = icmp6_recv(fd, msg, sizeof(msg), &saddr, &pkt_info, &hoplimit);
 
@@ -1821,7 +1821,7 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	if (hai != NULL) {
 		int optlen = len - sizeof(struct nd_neighbor_advert);
 		uint8_t *opt = (uint8_t *)(na + 1);
-		
+
 		while (optlen > 1) {
 			int olen = opt[1] << 3;
 			
@@ -1831,7 +1831,7 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 			switch (opt[0]) {
 			case ND_OPT_TARGET_LINKADDR:
 				hwa = &opt[2];
-				hai->hwalen = opt[1] * 8 - 2;
+				hwalen = opt[1] * 8 - 2;
 				break;
 			}
 			optlen -= olen;
@@ -1841,9 +1841,8 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	if (IN6_ARE_ADDR_EQUAL(addr, &na->nd_na_target)) {
 		if (has_home_reg && hwa != NULL) {
 			ret = neigh_add(iif, NUD_STALE, NTF_ROUTER,
-				  &hai->ha_addr, hwa, hai->hwalen, 1);
+				  &hai->ha_addr, hwa, hwalen, 1);
 			dbg("ret %d\n", ret);
-
 		}
 		return 1;
 	}
