@@ -725,44 +725,6 @@ process_del_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 	return 0;
 }
 
-static int process_inet6_iface(struct nlmsghdr *n, 
-			       struct ifinfomsg *ifi,
-			       struct rtattr **rta_tb)
-{
-	if (rta_tb[IFLA_ADDRESS] != NULL) {
-		int hwalen = nd_get_l2addr_len(ifi->ifi_type);
-		if (rta_tb[IFLA_ADDRESS]->rta_len != RTA_LENGTH(hwalen)) {
-			syslog(LOG_WARNING, 
-			       "Interface %d (%s):type %d unsupported",
-			       ifi->ifi_index, 
-			       (char *) RTA_DATA(rta_tb[IFLA_IFNAME]),
-			       ifi->ifi_type);
-			return -EINVAL;
-		}
-	}
-	if (n->nlmsg_type == RTM_NEWLINK) {
-		process_new_inet6_iface(ifi, rta_tb);
-	} else if (n->nlmsg_type == RTM_DELLINK) {
-		process_del_inet6_iface(ifi, rta_tb);
-	}
-	return 0;
-}
-
-static int process_new_link(struct ifinfomsg *ifi, struct rtattr **rta_tb)
-{
-	struct md_inet6_iface *iface;
-	if ((iface = md_get_inet6_iface(&ifaces, ifi->ifi_index)) != NULL &&
-	    link_flags_changed(ifi->ifi_flags, iface->link_flags)) {
-		iface->link_flags = ifi->ifi_flags;
-		if (md_is_link_up(iface))
-			md_link_up(iface);
-		else 
-			md_link_down(iface);
-	}
-	return 0;
-}
-
-
 static int process_link(struct nlmsghdr *n, void *arg)
 {
 	struct ifinfomsg *ifi;
@@ -784,14 +746,25 @@ static int process_link(struct nlmsghdr *n, void *arg)
 	memset(rta_tb, 0, sizeof(rta_tb));
 	parse_rtattr(rta_tb, IFLA_MAX, IFLA_RTA(ifi),
 		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi)));
+
+	/* For non-AF_UNSPEC, do an additional L2 @ length check */
+	if (ifi->ifi_family != AF_UNSPEC && rta_tb[IFLA_ADDRESS] != NULL) {
+		int hwalen = nd_get_l2addr_len(ifi->ifi_type);
+		if (rta_tb[IFLA_ADDRESS]->rta_len != RTA_LENGTH(hwalen)) {
+			syslog(LOG_WARNING,
+			       "Interface %d (%s):type %d unsupported",
+			       ifi->ifi_index,
+			       (char *) RTA_DATA(rta_tb[IFLA_IFNAME]),
+			       ifi->ifi_type);
+			return 0;
+		}
+	}
+
 	pthread_mutex_lock(&iface_lock);
-	if (ifi->ifi_family == AF_UNSPEC) {
-		if (n->nlmsg_type == RTM_NEWLINK)
-			process_new_link(ifi, rta_tb);
-		else if (n->nlmsg_type == RTM_DELLINK)
-			process_del_inet6_iface(ifi, rta_tb);
-	} else
-		process_inet6_iface(n, ifi, rta_tb);
+	if (n->nlmsg_type == RTM_NEWLINK)
+		process_new_inet6_iface(ifi, rta_tb);
+	else if (n->nlmsg_type == RTM_DELLINK)
+		process_del_inet6_iface(ifi, rta_tb);
 	pthread_mutex_unlock(&iface_lock);
 
 	return 0;
