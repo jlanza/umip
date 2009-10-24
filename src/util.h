@@ -185,12 +185,10 @@ static inline int in6_is_addr_routable_unicast(const struct in6_addr *a)
  **/
 static inline void free_iov_data(struct iovec *iov, int count)
 {
-	int len = count;
-
 	if (iov == NULL) return;
-	while (len--) {
-		if (iov[len].iov_base)
-			free(iov[len].iov_base);
+	while (count--) {
+		if (iov[count].iov_base)
+			free(iov[count].iov_base);
 	}
 }
 
