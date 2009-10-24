@@ -185,6 +185,15 @@ int rtnl_dump_filter(struct rtnl_handle *rth,
 			continue;
 		}
 
+		/* Everyone can send empty messages which will led to
+		 * status == 0. Before checking if status == 0, check
+		 * the origin. Here, we only allow messages from kernel.
+		 * --arno */
+		if (nladdr.nl_pid != 0) {
+			NLDBG("Dropping non-kernel Netlink message.\n");
+			continue;
+		}
+
 		if (status == 0) {
 			NLDBG("EOF on netlink\n");
 			return -1;
@@ -287,14 +296,24 @@ int rtnl_talk(struct rtnl_handle *rtnl, struct nlmsghdr *n, pid_t peer,
 			NLDBG_SYS("OVERRUN");
 			continue;
 		}
-		if (status == 0) {
-			NLDBG("EOF on netlink\n");
-			return -1;
-		}
+
 		if (msg.msg_namelen != sizeof(nladdr)) {
 			NLDBG("sender address length == %d\n", msg.msg_namelen);
 			return -2;
 		}
+		/* Everyone can send empty messages which will led to
+		 * status == 0. Before checking if status == 0, check
+		 * the origin. --arno */
+		if (nladdr.nl_pid != peer) {
+			NLDBG("Received Netlink message from unknown peer.\n");
+			continue;
+		}
+
+		if (status == 0) {
+			NLDBG("EOF on netlink\n");
+			return -1;
+		}
+
 		for (h = (struct nlmsghdr*)buf; status >= sizeof(*h); ) {
 			int err;
 			int len = h->nlmsg_len;
@@ -391,13 +410,22 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 			NLDBG_SYS("OVERRUN");
 			continue;
 		}
-		if (status == 0) {
-			NLDBG("EOF on netlink\n");
-			return -1;
-		}
 		if (msg.msg_namelen != sizeof(nladdr)) {
 			NLDBG("Sender address length == %d\n", msg.msg_namelen);
 			return -2;
+		}
+		/* Everyone can send empty messages which will led to
+		 * status == 0. Before checking if status == 0, check
+		 * the origin. Here, we only allow messages from kernel.
+		 * --arno */
+		if (nladdr.nl_pid != 0) {
+			NLDBG("Dropping non-kernel Netlink message.\n");
+			continue;
+		}
+
+		if (status == 0) {
+			NLDBG("EOF on netlink\n");
+			return -1;
 		}
 		for (h = (struct nlmsghdr*)buf; status >= sizeof(*h); ) {
 			int err;
