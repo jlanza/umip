@@ -1682,25 +1682,24 @@ int mn_update_home_prefix(struct home_addr_info *hai,
 	return 0;
 }
 
+/* Decide which CoA should be used for RO. Policy Manager is asked
+ * first. If it does not provide a hint, primary CoA is used. The
+ * function returns the ifindex of the interface the CoA is associated
+ * with and copies the CoA to 'coa'.
+ */
 static int mn_get_ro_coa(const struct in6_addr *cn,
-			 const struct in6_addr *hoa,
+			 const struct home_addr_info *hai,
 			 struct in6_addr *coa)
 {
-	struct home_addr_info *hai;
-	int ret;
-	if ((ret = conf.pmgr.best_ro_coa(hoa, cn, coa)) > 0)
-		return ret;
-	hai = mn_get_home_addr(hoa);
-	if (hai) {
+	int ret = conf.pmgr.best_ro_coa(&hai->hoa.addr, cn, coa);
+
+	if (ret <= 0) { /* Policy manager remained silent, let's use hai */
 		*coa = hai->primary_coa.addr;
 		ret = hai->primary_coa.iif;
-	} else {
-		MDBG("Failed to find a home address info\n");
-		ret = -1;
 	}
-	return ret;
-} 
 
+	return ret;
+}
 
 static struct in6_addr linklocal_prefix = { { { 0xfe,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,0 } } };
 
@@ -2379,7 +2378,7 @@ int mn_rr_start_handoff(void *vbule, void *dummy)
 		bule->dereg = 1;
 		tsclear(bule->lifetime);
 	}
-	bule->if_coa = mn_get_ro_coa(&bule->peer_addr, &bule->hoa, &bule->coa);
+	bule->if_coa = mn_get_ro_coa(&bule->peer_addr, bule->home, &bule->coa);
 	if (bule->if_coa < 0)
 		goto delete_entry;
 
@@ -2408,7 +2407,7 @@ void mn_start_ro(struct in6_addr *cn, struct in6_addr *hoa, int iif)
 		pthread_rwlock_unlock(&mn_lock);
 		return;
 	}
-	if_coa = mn_get_ro_coa(cn, hoa, &coa);
+	if_coa = mn_get_ro_coa(cn, hai, &coa);
 
 	if (if_coa > 0) {
 		MDBG("MN: Start RO to %x:%x:%x:%x:%x:%x:%x:%x, "
