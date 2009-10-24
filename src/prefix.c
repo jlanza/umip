@@ -66,13 +66,13 @@ static inline int prefix_list_len(const struct list_head *pl)
 int prefix_list_cmp(const struct list_head *pl1, const struct list_head *pl2)
 {
 	struct list_head *l1, *l2;
-	int pl1_len, pl2_len;
-	int match = 0;
 
-	pl1_len = prefix_list_len(pl1);
-	pl2_len = prefix_list_len(pl2);
+	/* If lists lengths differ, no need to go further */
+	if (prefix_list_len(pl1) != prefix_list_len(pl2))
+		return 0;
 
 	list_for_each(l1, pl1) {
+		int match = 0;
 		struct prefix_list_entry *p1;
 		p1 = list_entry(l1, struct prefix_list_entry, list);
 
@@ -84,11 +84,14 @@ int prefix_list_cmp(const struct list_head *pl1, const struct list_head *pl2)
 			    ipv6_pfx_cmp(&p1->ple_prefix, 
 					 &p2->ple_prefix, p1->ple_plen))
 				continue;
-			match++;
+			match = 1;
 			break;
 		}
+
+		if (!match)
+			return 0;
 	}
-	return pl1_len == match && pl2_len == match;
+	return 1;
 }
 
 int prefix_list_copy(const struct list_head *pl1, struct list_head *pl2)
