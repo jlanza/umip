@@ -331,64 +331,15 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 	return ret;
 }
 
-int ndisc_send_rs(int ifindex, const struct in6_addr *src,
-		  const struct in6_addr *dst)
+int ndisc_send_rs(int ifindex, const struct in6_addr *dst)
 {
-	struct iovec iov[2];
-	uint8_t l2addr[32];
-	int len;
-	int res;
-
-	if (IN6_IS_ADDR_UNSPECIFIED(src))
-		return ndisc_send_unspec(ND_ROUTER_SOLICIT, ifindex, dst);
-
-	if ((len = nd_get_l2addr(ifindex, l2addr)) < 0)
-		return -EINVAL;
-
-	if (icmp6_create(iov, ND_ROUTER_SOLICIT, 0) == NULL)
-		return -ENOMEM;
-
-	if (len > 0 && nd_opt_create(&iov[1], ND_OPT_SOURCE_LINKADDR, 
-				     len, l2addr) == NULL) {
-		free_iov_data(iov, 1);
-		return -ENOMEM;
-	}	
-	res = icmp6_send(ifindex, 255, src, dst, iov, 2);
-	free_iov_data(iov, 2);
-
-	return res;
+	return ndisc_send_unspec(ND_ROUTER_SOLICIT, ifindex, dst);
 }
 
-int ndisc_send_ns(int ifindex, const struct in6_addr *src, 
-		  const struct in6_addr *dst,
+int ndisc_send_ns(int ifindex, const struct in6_addr *dst,
 		  const struct in6_addr *target)
 {
-	struct nd_neighbor_solicit *ns;
-	struct iovec iov[2];
-	uint8_t l2addr[32];
-	int len;
-	int res;
-
-	if (IN6_IS_ADDR_UNSPECIFIED(src))
-		return ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifindex, target);
-
-	if ((len = nd_get_l2addr(ifindex, l2addr)) < 0)
-		return -EINVAL;
-
-	ns = icmp6_create(iov, ND_NEIGHBOR_SOLICIT, 0);
-
-	if (ns == NULL) return -ENOMEM;
-
-	ns->nd_ns_target = *target;
-
-	if (len > 0 && nd_opt_create(&iov[1], ND_OPT_SOURCE_LINKADDR, 
-				     len, l2addr) == NULL)
-		return -ENOMEM;
-
-	res = icmp6_send(ifindex, 255, src, dst, iov, 2);
-	free_iov_data(iov, 2);
-
-	return res;
+	return ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifindex, target);
 }
 
 int ndisc_send_na(int ifindex, const struct in6_addr *src, 

@@ -1872,7 +1872,7 @@ static int mn_dad_probe(struct in6_addr *addr, int plen, int ifindex)
 	   DAD probe or MN will receive reply from itself */
 	ipv6_addr_solict_mult(addr, &solicit);
 	deleted = !addr_del(addr, plen, ifindex);
-	ndisc_send_ns(ifindex, &in6addr_any, &solicit, addr);
+	ndisc_send_ns(ifindex, &solicit, addr);
 	return deleted;
 }
 
