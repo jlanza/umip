@@ -84,8 +84,6 @@ static inline int bce_exists(const struct in6_addr *our_addr,
 
 void dump_bce(void *bce, void *os);
 
-int get_bcache_count(int type);
-
 extern pthread_rwlock_t bc_lock; /* Protects binding cache */
 
 #endif

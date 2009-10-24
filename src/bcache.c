@@ -45,20 +45,7 @@
 
 static struct hash bc_hash;
 
-static int bcache_count = 0;
-
 pthread_rwlock_t bc_lock; /* Protects binding cache */
-
-/** 
- * get_bcache_count - returns number of home and cache entries
- * @type: HOMEREGENTRY, CACHEENTRY or ANY
- **/
-int get_bcache_count(int type)
-{
-	if (!type)
-		return bcache_count;
-	return 0;
-}
 
 void dump_bce(void *bce, void *os)
 {
@@ -268,7 +255,6 @@ static int __bcache_insert(struct bcentry *bce)
 	if (ret)
 		return ret;
 
-	bcache_count++;
 	return 0;
 }
 
@@ -413,7 +399,6 @@ static void bce_delete(struct bcentry *bce, int flush)
 			return;
 		}
 	}
-	bcache_count--;
 	hash_delete(&bc_hash, &bce->our_addr, &bce->peer_addr);
 	pthread_rwlock_unlock(&bce->lock);
 	bcache_free(bce);
