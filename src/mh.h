@@ -129,4 +129,8 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 void mh_handler_reg(uint8_t type, struct mh_handler *handler);
 void mh_handler_dereg(uint8_t type, struct mh_handler *handler);
 
+/* Some debug helper for BA status */
+#define MAX_BA_STATUS_STR_LEN 64
+void mh_ba_status_to_str(int status, char *err_str);
+
 #endif

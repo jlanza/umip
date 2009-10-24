@@ -1107,14 +1107,20 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 		}
 		if (bule->flags & IP6_MH_BU_HOME) { 
 			struct home_addr_info *hai = bule->home;
+			char err_str[MAX_BA_STATUS_STR_LEN];
+
 			if (hai->at_home) {
 				bul_delete(bule);
 				mn_do_dad(hai, 1);
 				pthread_rwlock_unlock(&mn_lock);
 				return;
 			}
-			syslog(LOG_ERR, 
-			       "Unable to register with HA, deleting entry\n");
+
+			mh_ba_status_to_str(ba->ip6mhba_status, err_str);
+			syslog(LOG_ERR, "Received BA with error status %s. "
+			       "Unable to register with HA. Deleting entry\n",
+			       err_str);
+
 			if (hai->use_dhaad) {
 				bule_invalidate(bule, &now, 0);
 				mn_change_ha(hai);

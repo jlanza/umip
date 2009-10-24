@@ -1113,3 +1113,37 @@ void mh_cleanup(void)
 	pthread_cancel(mh_listener);
 	pthread_join(mh_listener, NULL);
 }
+
+/* based on http://www.iana.org/assignments/mobility-parameters (last
+ * updated 2008-10-10 version), but only for protocols we support, i.e.
+ * MIPv6 and NEMO. Think about updating MAX_BA_STATUS_STR_LEN in header
+ * file if needed. */
+void mh_ba_status_to_str(int status, char *err_str)
+{
+	char *s;
+
+	switch (status) {
+	case IP6_MH_BAS_ACCEPTED:            s = "Binding Update accepted"; break;
+	case IP6_MH_BAS_PRFX_DISCOV:         s = "Accepted but prefix discovery necessary" ; break;
+	case IP6_MH_BAS_UNSPECIFIED:         s = "Reason unspecified"; break;
+	case IP6_MH_BAS_PROHIBIT:            s = "Administratively prohibited"; break;
+	case IP6_MH_BAS_INSUFFICIENT:        s = "Insufficient resources"; break;
+	case IP6_MH_BAS_HA_NOT_SUPPORTED:    s = "Home registration not supported"; break;
+	case IP6_MH_BAS_NOT_HOME_SUBNET:     s = "Not home subnet"; break;
+	case IP6_MH_BAS_NOT_HA:              s = "Not home agent for this mobile node"; break;
+	case IP6_MH_BAS_DAD_FAILED:          s = "Duplicate Address Detection failed"; break;
+	case IP6_MH_BAS_SEQNO_BAD:           s = "Sequence number out of window"; break;
+	case IP6_MH_BAS_HOME_NI_EXPIRED:     s = "Expired home nonce index"; break;
+	case IP6_MH_BAS_COA_NI_EXPIRED:      s = "Expired care-of nonce index";	break;
+	case IP6_MH_BAS_NI_EXPIRED:          s = "Expired nonces"; break;
+	case IP6_MH_BAS_REG_NOT_ALLOWED:     s = "Registration type change disallowed";	break;
+	case IP6_MH_BAS_MR_OP_NOT_PERMITTED: s = "Mobile Router Operation not permitted"; break;
+	case IP6_MH_BAS_INVAL_PRFX:          s = "Invalid Prefix"; break;
+	case IP6_MH_BAS_NOT_AUTH_FOR_PRFX:   s = "Not Authorized for Prefix"; break;
+	case IP6_MH_BAS_FWDING_FAILED:       s = "Forwarding Setup failed"; break;
+	default:                             s = "unknown by UMIP"; break;
+	}
+
+	memset(err_str, 0, MAX_BA_STATUS_STR_LEN);
+	sprintf(err_str, "%s (%d)", s, status);
+}
