@@ -1254,7 +1254,7 @@ static void md_prefix_rule_add(struct prefix_list_entry *p)
 
 static void md_update_router(struct md_router *new, struct md_router *old)
 {
-	struct list_head *lnew, *lold, *n;
+	struct list_head *lnew, *n;
 
 	MDBG2("updating router %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
 	      NIP6ADDR(&old->lladdr), old->iface->name, old->iface->ifindex);
@@ -1273,11 +1273,17 @@ static void md_update_router(struct md_router *new, struct md_router *old)
 	old->lifetime = new->lifetime;
 
 	list_for_each_safe(lnew, n, &new->prefixes) {
-		struct prefix_list_entry *pnew;
+		struct prefix_list_entry *pnew, *pold;
 
 		pnew = list_entry(lnew, struct prefix_list_entry, list);
-		if (!prefix_list_find(&old->prefixes,
-				      &pnew->ple_prefix, pnew->ple_plen)) {
+		if ((pold = prefix_list_get(&old->prefixes,
+					    &pnew->ple_prefix,
+					    pnew->ple_plen)) != NULL) {
+			pold->timestamp = pnew->timestamp;
+			pold->ple_flags = pnew->ple_flags;
+			pold->ple_valid_time = pnew->ple_valid_time;
+			pold->ple_prefd_time = pnew->ple_prefd_time;
+		} else {
 			if (old->used)
 				md_prefix_rule_add(pnew);
 			list_del(lnew);
@@ -1285,23 +1291,6 @@ static void md_update_router(struct md_router *new, struct md_router *old)
 			old->prefix_cnt++;
 			if (pnew->ple_flags & ND_OPT_PI_FLAG_RADDR)
 				old->raddr_cnt++;
-		} else {
-			list_for_each(lold, &old->prefixes) {
-				struct prefix_list_entry *pold;
-				pold = list_entry(lold, 
-						  struct prefix_list_entry,
-						  list);
-				if (pnew->ple_plen != pold->ple_plen ||
-				    ipv6_pfx_cmp(&pnew->ple_prefix, 
-						 &pold->ple_prefix,
-						 pnew->ple_plen))
-					continue;
-				pold->timestamp = pnew->timestamp;
-				pold->ple_flags = pnew->ple_flags;
-				pold->ple_valid_time = pnew->ple_valid_time;
-				pold->ple_prefd_time = pnew->ple_prefd_time;
-				break;
-			}
 		}
 	}
 	__md_free_router(new);
