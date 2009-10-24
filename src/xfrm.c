@@ -1897,7 +1897,7 @@ int xfrm_pre_bu_add_bule(struct bulentry *bule)
 	return xfrm_state_add(&sel, IPPROTO_DSTOPTS, &bule->coa, rdata, 0);
 }
 
-/* before sending BU, MN should insert policy/state only for BU/BA */
+/* After receiving BA, MN should update MIP policies for data traffic */
 int xfrm_post_ba_mod_bule(struct bulentry *bule)
 {
 	struct xfrm_selector sel;
