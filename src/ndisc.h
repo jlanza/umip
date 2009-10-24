@@ -42,6 +42,10 @@ int ndisc_send_na(int ifindex, const struct in6_addr *src,
 		  const struct in6_addr *dst,
 		  const struct in6_addr *target, uint32_t flags);
 
+void proxy_nd_iface_init(int ifindex);
+
+void proxy_nd_iface_cleanup(int ifindex);
+
 int proxy_nd_start(int ifindex, struct in6_addr *target, 
 		   struct in6_addr *src, int bu_flags);
 

@@ -15,6 +15,7 @@
 #define PROC_SYS_IP6_BASEREACHTIME_MS "/proc/sys/net/ipv6/neigh/%s/base_reachable_time_ms"
 #define PROC_SYS_IP6_RETRANSTIMER_MS "/proc/sys/net/ipv6/neigh/%s/retrans_time_ms"
 #define PROC_SYS_IP6_FORWARDING "/proc/sys/net/ipv6/conf/%s/forwarding"
+#define PROC_SYS_IP6_PROXY_NDP "/proc/sys/net/ipv6/conf/%s/proxy_ndp"
 
 int set_iface_proc_entry(const char *tmpl, const char *if_name, int val);
 

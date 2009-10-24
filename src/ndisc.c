@@ -44,6 +44,7 @@
 #include "util.h"
 #include "ndisc.h"
 #include "rtnl.h"
+#include "proc_sys.h"
 
 static int neigh_mod(int nl_flags, int cmd, int ifindex,
 		     uint16_t state, uint8_t flags, struct in6_addr *dst,
@@ -100,6 +101,23 @@ int pneigh_del(int ifindex, struct in6_addr *dst)
 	return neigh_mod(0, RTM_DELNEIGH, ifindex, 0, NTF_PROXY, dst, NULL, 0);
 }
 
+static inline void proxy_nd_iface_set(int ifindex, int val)
+{
+	char ifname[IF_NAMESIZE];
+
+	if (if_indextoname(ifindex, ifname) != NULL)
+		set_iface_proc_entry(PROC_SYS_IP6_PROXY_NDP, ifname, val);
+}
+
+void proxy_nd_iface_init(int ifindex)
+{
+	proxy_nd_iface_set(ifindex, 1);
+}
+
+void proxy_nd_iface_cleanup(int ifindex)
+{
+	proxy_nd_iface_set(ifindex, 0);
+}
 
 int proxy_nd_start(int ifindex, struct in6_addr *target, 
 		   struct in6_addr *src, int bu_flags)

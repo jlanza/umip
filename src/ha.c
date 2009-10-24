@@ -314,6 +314,26 @@ void ha_discover_routers(void)
 	}
 }
 
+static void ha_proxy_nd_init(void)
+{
+	struct list_head *lp;
+	list_for_each(lp, &ha_interfaces) {
+		struct ha_interface *i;
+		i = list_entry(lp, struct ha_interface, iflist);
+		proxy_nd_iface_init(i->ifindex);
+	}
+}
+
+static void ha_proxy_nd_cleanup(void)
+{
+	struct list_head *lp;
+	list_for_each(lp, &ha_interfaces) {
+		struct ha_interface *i;
+		i = list_entry(lp, struct ha_interface, iflist);
+		proxy_nd_iface_cleanup(i->ifindex);
+	}
+}
+
 #ifdef ENABLE_VT
 struct ha_vt_arg {
 	const struct vt_handle *vh;
@@ -1202,6 +1222,7 @@ int ha_init(void)
 		return -1;
 	icmp6_handler_reg(ND_ROUTER_ADVERT, &ha_ra_handler);
 	ha_discover_routers(); /* Let's gather RA */
+	ha_proxy_nd_init();
 	mh_handler_reg(IP6_MH_TYPE_BU, &ha_bu_handler);
 	return 0;
 }
@@ -1209,6 +1230,7 @@ int ha_init(void)
 void ha_cleanup(void)
 {
 	mh_handler_dereg(IP6_MH_TYPE_BU, &ha_bu_handler);
+	ha_proxy_nd_cleanup();
 	icmp6_handler_dereg(ND_ROUTER_ADVERT, &ha_ra_handler);
 	pthread_mutex_lock(&bu_worker_mutex);
 	if (bu_worker_count)
