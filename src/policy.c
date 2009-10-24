@@ -328,8 +328,10 @@ static int policy_bind_acl_config(void)
 
 	pthread_rwlock_wrlock(&policy_lock);
 
-	err = hash_init(&policy_bind_acl_hash, SINGLE_ADDR, 
-			POLICY_ACL_HASHSIZE);
+	if ((err = hash_init(&policy_bind_acl_hash, SINGLE_ADDR,
+			     POLICY_ACL_HASHSIZE)) < 0)
+		goto out;
+
 	def_bind_policy = conf.DefaultBindingAclPolicy;
 
 	list_for_each_safe(list, n, &conf.bind_acl) {
@@ -340,6 +342,7 @@ static int policy_bind_acl_config(void)
 			break;
 		}
 	}
+out:
 	pthread_rwlock_unlock(&policy_lock);
 	return err;
 }
