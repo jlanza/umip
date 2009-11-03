@@ -879,9 +879,6 @@ restart:
 				pthread_mutex_lock(&bu_worker_mutex);
 				list_add_tail(&arg->list, &bu_worker_list);
 				bu_worker_count--;
-				/* with BCE_DAD we should have at least one
-				   active worker */
-				assert(bu_worker_count > 0);
 				*(arg->statusp) = -EBUSY;
 				pthread_mutex_unlock(&bu_worker_mutex);
 				pthread_exit(NULL);
