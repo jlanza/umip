@@ -269,6 +269,14 @@ static int ha_addr_setup(void)
 static int ha_insert_if(int newifindex)
 {
 	struct ha_interface *newif;
+	struct list_head *lp;
+
+	list_for_each(lp, &ha_interfaces) {
+		struct ha_interface *i;
+		i = list_entry(lp, struct ha_interface, iflist);
+		if (i->ifindex == newifindex)
+			return 0; /* No need to bother: iface already there. */
+	}
 
 	newif = malloc(sizeof(*newif));
 	if (newif == NULL)
