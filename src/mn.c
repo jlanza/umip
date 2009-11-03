@@ -1648,11 +1648,11 @@ int mn_update_home_prefix(struct home_addr_info *hai,
 			addr_do(&hai->hoa.addr, plen,
 				hai->hoa.iif, &arg, flag_hoa);
 		}
-	} else if (hai->home_reg_status != HOME_REG_NONE) {
-		if (hai->hoa.valid_time.tv_sec)
+	} else if (hai->home_reg_status != HOME_REG_VALID) {
+		if (hai->hoa.valid_time.tv_sec) {
 			addr_do(&hai->hoa.addr, 128, hai->hoa.iif, 
 				hai, update_hoa);
-		else
+		} else
 			addr_del(&hai->hoa.addr, 128, hai->hoa.iif);
 	}
 
