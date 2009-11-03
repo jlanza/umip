@@ -750,17 +750,18 @@ static int mr_ipsec_bypass_init(void)
 
 static inline int mn_ha_ipsec_init(void)
 {
-	int err;
-
 	/* insert bypass policy */
-	err = ipsec_policy_walk(_mn_ha_ipsec_bypass_init, NULL);
+	if (ipsec_policy_walk(_mn_ha_ipsec_bypass_init, NULL))
+		return -1;
 
 	/* insert NEMO-related bypass */
-	err = mr_ipsec_bypass_init();
+	if (mr_ipsec_bypass_init())
+		return -1;
 
-	err = ipsec_policy_walk(_mn_ha_ipsec_init, NULL);
+	if (ipsec_policy_walk(_mn_ha_ipsec_init, NULL))
+		return -1;
 
-	return err;
+	return 0;
 }
 
 /* Create a state and policy for receiving routing header type 2 to
