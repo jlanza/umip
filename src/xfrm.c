@@ -706,46 +706,42 @@ static int mr_ipsec_bypass_init(void)
 {
 	struct list_head *home;
 	struct list_head *mnps;
+	int prio = MIP6_PRIO_MR_LOCAL_DATA_BYPASS;
 	int err=0;
 
 	/* Loop for each HomeAddress info */
-	list_for_each(home, &conf.home_addrs)
-	{
+	list_for_each(home, &conf.home_addrs) {
 		struct home_addr_info *hai;
 		hai = list_entry(home, struct home_addr_info, list);
 
-		/* If Mobile Router for this link, loop for each MNP */
-		if (hai->mob_rtr)
-		{
-			/* Add bypass policies to and from the MNP link */
-			list_for_each(mnps, &hai->mob_net_prefixes)
-			{
-				struct prefix_list_entry * mnp;
-				struct xfrm_selector sel;
-				uid_t uid = getuid();
+		if (!hai->mob_rtr)
+			continue;
 
-				mnp = list_entry(mnps, struct prefix_list_entry, list);
+		/* Mobile Router for this link so loop for each MNP to
+		 * add bypass policies to *and* from the MNP link */
+		list_for_each(mnps, &hai->mob_net_prefixes) {
+			struct prefix_list_entry * mnp;
+			struct xfrm_selector sel;
+			uid_t uid = getuid();
 
-				/* IN, src = MNP , dst = any */
-				mr_set_selector(mnp, NULL, uid, &sel);
-				err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_IN,
-                                XFRM_POLICY_ALLOW,
-							    MIP6_PRIO_MR_LOCAL_DATA_BYPASS,
-							    NULL, 0);
+			mnp = list_entry(mnps, struct prefix_list_entry, list);
 
-				/* FWD, src = MNP , dst = any */
-				err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_FWD,
-                                XFRM_POLICY_ALLOW,
-							    MIP6_PRIO_MR_LOCAL_DATA_BYPASS,
-							    NULL, 0);
+			/* IN, src = MNP , dst = any */
+			mr_set_selector(mnp, NULL, uid, &sel);
+			err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_IN,
+						    XFRM_POLICY_ALLOW, prio,
+						    NULL, 0);
 
-				/* OUT, src = any , dst = MNP */
-				mr_set_selector(NULL, mnp, uid, &sel);
-				err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_OUT,
-                                XFRM_POLICY_ALLOW,
-							    MIP6_PRIO_MR_LOCAL_DATA_BYPASS,
-							    NULL, 0);
-			}
+			/* FWD, src = MNP , dst = any */
+			err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_FWD,
+						    XFRM_POLICY_ALLOW, prio,
+						    NULL, 0);
+
+			/* OUT, src = any , dst = MNP */
+			mr_set_selector(NULL, mnp, uid, &sel);
+			err = xfrm_ipsec_policy_add(&sel, 0, XFRM_POLICY_OUT,
+						    XFRM_POLICY_ALLOW, prio,
+						    NULL, 0);
 		}
 	}
 
@@ -875,29 +871,28 @@ static int mr_ipsec_bypass_cleanup(void)
 		struct home_addr_info *hai;
 		hai = list_entry(home, struct home_addr_info, list);
 
-		/* If Mobile Router for this link, loop for each MNP */
-		if (hai->mob_rtr)
-		{
-			/* Delete bypass policies to and from the MNP link */
-			list_for_each(mnps, &hai->mob_net_prefixes)
-			{
-				struct prefix_list_entry * mnp;
-				struct xfrm_selector sel;
-				uid_t uid = getuid();
+		if (!hai->mob_rtr)
+			continue;
 
-				mnp = list_entry(mnps, struct prefix_list_entry, list);
+		/* Mobile Router for this link so loop for each MNP to
+		 * delete bypass policies to *and* from the MNP link */
+		list_for_each(mnps, &hai->mob_net_prefixes) {
+			struct prefix_list_entry * mnp;
+			struct xfrm_selector sel;
+			uid_t uid = getuid();
 
-				/* IN, src = MNP , dst = any */
-				mr_set_selector(mnp, NULL, uid, &sel);
-				err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_IN);
+			mnp = list_entry(mnps, struct prefix_list_entry, list);
 
-				/* FWD, src = MNP , dst = any */
-				err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_FWD);
+			/* IN, src = MNP , dst = any */
+			mr_set_selector(mnp, NULL, uid, &sel);
+			err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_IN);
 
-				/* OUT, src = any , dst = MNP */
-				mr_set_selector(NULL, mnp, uid, &sel);
-				err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_OUT);
-			}
+			/* FWD, src = MNP , dst = any */
+			err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_FWD);
+
+			/* OUT, src = any , dst = MNP */
+			mr_set_selector(NULL, mnp, uid, &sel);
+			err = xfrm_ipsec_policy_del(&sel, XFRM_POLICY_OUT);
 		}
 	}
 
