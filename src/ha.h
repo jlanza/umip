@@ -42,7 +42,7 @@ struct ha_interface *ha_get_if(int ifindex);
 struct ha_interface *ha_get_if_by_addr(const struct in6_addr *addr);
 struct ha_interface *ha_get_if_by_anycast(const struct in6_addr *anycast,
 					  struct in6_addr **addr);
-int ha_recv_bu_main(const struct ip6_mh *mh, ssize_t len,
+int ha_recv_home_bu(const struct ip6_mh *mh, ssize_t len,
 		    const struct in6_addr_bundle *in, int iif, uint32_t flags);
 #define HA_BU_F_THREAD_JOIN	0x01
 #define HA_BU_F_PASSIVE_SEQ	0x02

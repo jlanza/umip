@@ -47,6 +47,14 @@
 #include "cn.h"
 #include "conf.h"
 
+#define MH_DEBUG_LEVEL 1
+
+#if MH_DEBUG_LEVEL >= 1
+#define MDBG dbg
+#else
+#define MDBG(x...)
+#endif
+
 #define ICMP_ERROR_PERSISTENT_THRESHOLD 3
 
 const struct timespec cn_brr_before_expiry_ts =
@@ -149,6 +157,47 @@ static struct mh_handler cn_coti_handler = {
 	.recv = cn_recv_coti,
 };
 
+/* After parsing, perform CN-specific checks (auth + nonce) on BU */
+static int cn_bu_check(struct ip6_mh_binding_update *bu, ssize_t len,
+		       struct mh_options *mh_opts,
+		       struct in6_addr *peer_addr,
+		       struct in6_addr *our_addr,
+		       struct in6_addr *bind_coa,
+		       struct timespec *lifetime, uint8_t *key)
+{
+	struct ip6_mh_opt_nonce_index *non_ind;
+	struct ip6_mh_opt_auth_data *bauth;
+	int ret;
+
+	non_ind = mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_NONCEID);
+	if (!non_ind)
+		return -1;
+
+	MDBG("src %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(peer_addr));
+	MDBG("coa %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(bind_coa));
+
+	if (tsisset(*lifetime))
+		ret = rr_cn_calc_Kbm(ntohs(non_ind->ip6moni_home_nonce),
+				     ntohs(non_ind->ip6moni_coa_nonce),
+				     peer_addr, bind_coa, key);
+	else /* Only use home nonce and address for dereg. */
+		ret = rr_cn_calc_Kbm(ntohs(non_ind->ip6moni_home_nonce), 0,
+				     peer_addr, NULL, key);
+	if (ret)
+		return ret;
+
+	bauth = mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_BAUTH);
+	if (!bauth)
+		return -1;
+
+	/* Authenticator is calculated with MH checksum set to 0 */
+	bu->ip6mhbu_hdr.ip6mh_cksum = 0;
+	if (mh_verify_auth_data(bu, len, bauth, bind_coa, our_addr, key) < 0)
+		return -1;
+
+	return IP6_MH_BAS_ACCEPTED;
+}
+
 void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 		const struct in6_addr_bundle *in, int iif)
 {
@@ -165,8 +214,11 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 
 	bu = (struct ip6_mh_binding_update *)mh;
 
-	status = mh_bu_parse(bu, len, in, &out, &mh_opts, &lft, key);
-	if (status < 0)
+	if (mh_bu_parse(bu, len, in, &out, &mh_opts, &lft) < 0)
+		return;
+
+	if ((status = cn_bu_check(bu, len, &mh_opts, out.dst, out.src,
+				  out.bind_coa, &lft, key)) < 0)
 		return;
 
 	seqno = ntohs(bu->ip6mhbu_seqno);

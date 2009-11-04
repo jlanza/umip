@@ -1126,24 +1126,37 @@ send_nack:
 	goto out;
 }
 
-int ha_recv_bu_main(const struct ip6_mh *mh, ssize_t len,
-		    const struct in6_addr_bundle *in, int iif, uint32_t flags)
+/* After parsing, perform HA-specific checks on *home* bu */
+static inline int ha_home_bu_check(struct ip6_mh_binding_update *bu,
+			      struct mh_options *mh_opts)
 {
-	struct ip6_mh_binding_update *bu;
+	if (!(bu->ip6mhbu_flags & IP6_MH_BU_HOME) ||
+	    mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_NONCEID) != NULL ||
+	    mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_BAUTH) != NULL)
+		return -1;
+
+	return IP6_MH_BAS_ACCEPTED;
+}
+
+/* Handle *Home* BU on HA (dispatch for received BU is done in BU handler) */
+int ha_recv_home_bu(const struct ip6_mh *mh, ssize_t len,
+		    const struct in6_addr_bundle *in, int iif,
+		    uint32_t flags)
+{
 	struct mh_options mh_opts;
 	struct in6_addr_bundle out;
 	struct ha_recv_bu_args *arg;
+	struct ip6_mh_binding_update *bu;
 	struct timespec lft;
-	int status = 0;
+	int status;
 	pthread_t worker;
 
 	bu = (struct ip6_mh_binding_update *)mh;
 
-	if (!(bu->ip6mhbu_flags & IP6_MH_BU_HOME)) {
-		cn_recv_bu(mh, len, in, iif);
-		return 0;
-	}
-	if (mh_bu_parse(bu, len, in, &out, &mh_opts, &lft, NULL) < 0)
+	if (mh_bu_parse(bu, len, in, &out, &mh_opts, &lft) < 0)
+		return -EINVAL;
+
+	if ((status = ha_home_bu_check(bu, &mh_opts)) < 0)
 		return -EINVAL;
 
 	arg = malloc(sizeof(struct ha_recv_bu_args) + len);
@@ -1198,7 +1211,12 @@ int ha_recv_bu_main(const struct ip6_mh *mh, ssize_t len,
 static void ha_recv_bu(const struct ip6_mh *mh, ssize_t len,
 		       const struct in6_addr_bundle *in, int iif)
 {
-	(void)ha_recv_bu_main(mh, len, in, iif, 0);
+	struct ip6_mh_binding_update *bu = (struct ip6_mh_binding_update *)mh;
+
+	if (bu->ip6mhbu_flags & IP6_MH_BU_HOME)
+		(void)ha_recv_home_bu(mh, len, in, iif, 0);
+	else
+		(void)cn_recv_bu(mh, len, in, iif);
 }
 
 static struct mh_handler ha_bu_handler = {

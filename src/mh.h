@@ -123,8 +123,7 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 		const struct in6_addr_bundle *in_addrs,
 		struct in6_addr_bundle *out_addrs,
 		struct mh_options *mh_opts,
-		struct timespec *lifetime,
-		uint8_t *key);
+		struct timespec *lifetime);
 
 void mh_handler_reg(uint8_t type, struct mh_handler *handler);
 void mh_handler_dereg(uint8_t type, struct mh_handler *handler);

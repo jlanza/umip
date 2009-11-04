@@ -1016,18 +1016,17 @@ void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status,
 	free_iov_data(mh_vec, iovlen);
 }
 
+/* Main BU parser, used by both HA (H flag set) and CN (H flag not set).
+ * Additional specific checks are performed for HA and CN via two
+ * specific helpers: ha_bu_check() (ha.c) and cn_bu_check() (cn.c). */
 int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 		const struct in6_addr_bundle *in_addrs,
 		struct in6_addr_bundle *out_addrs,
 		struct mh_options *mh_opts,
-		struct timespec *lifetime, uint8_t *key)
+		struct timespec *lifetime)
 {
 	struct in6_addr *our_addr, *peer_addr, *remote_coa;
 	struct ip6_mh_opt_altcoa *alt_coa;
-	struct ip6_mh_opt_nonce_index *non_ind;
-	struct ip6_mh_opt_auth_data *bauth;
-	uint16_t bu_flags;
-	int ret;
 
 	MDBG("Binding Update Received\n");
 	if (len < sizeof(struct ip6_mh_binding_update) ||
@@ -1068,43 +1067,11 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 	if (!out_addrs->bind_coa)
 		out_addrs->bind_coa = in_addrs->src;
 
-	bu_flags = bu->ip6mhbu_flags;
 	out_addrs->src = in_addrs->dst;
 	out_addrs->dst = in_addrs->src;
 	out_addrs->local_coa = NULL;
 
-	non_ind = mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_NONCEID);
-
-	if (bu_flags & IP6_MH_BU_HOME)
-		return non_ind ? -1 : 0;
-
-	if (!non_ind)
-		return -1;
-
-	MDBG("src %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(peer_addr));
-	MDBG("coa %x:%x:%x:%x:%x:%x:%x:%x\n", 
-	     NIP6ADDR(out_addrs->bind_coa));
-
-	if (tsisset(*lifetime))
-		ret = rr_cn_calc_Kbm(ntohs(non_ind->ip6moni_home_nonce),
-				     ntohs(non_ind->ip6moni_coa_nonce),
-				     peer_addr, out_addrs->bind_coa, key);
-	else /* Only use home nonce and address for dereg. */
-		ret = rr_cn_calc_Kbm(ntohs(non_ind->ip6moni_home_nonce), 0,
-				     peer_addr, NULL, key);
-	if (ret)
-		return ret;
-
-	bauth = mh_opt(&bu->ip6mhbu_hdr, mh_opts, IP6_MHOPT_BAUTH);
-	if (!bauth)
-		return -1;
-	/* Authenticator is calculated with MH checksum set to 0 */
-	bu->ip6mhbu_hdr.ip6mh_cksum = 0;
-	if (mh_verify_auth_data(bu, len, bauth, 
-				out_addrs->bind_coa, our_addr, key) < 0)
-		return -1;
-	
-	return IP6_MH_BAS_ACCEPTED;
+	return 0;
 }
 
 void mh_cleanup(void)

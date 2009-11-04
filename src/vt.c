@@ -61,6 +61,7 @@
 #include "bcache.h"
 #include "prefix.h"
 #include "ha.h"
+#include "cn.h"
 #include "mn.h"
 #include "mpdisc_mn.h"
 #include "mpdisc_ha.h"
@@ -904,6 +905,8 @@ static int bcache_vt_cmd_bc_mod(const struct vt_handle *vh, const char *str,
 	{
 		struct ip6_mh_binding_update bu;
 		struct in6_addr_bundle ab;
+		struct ip6_mh *mh = (struct ip6_mh *)&bu;
+		int len = sizeof(bu);
 
 		memset(&bu, 0, sizeof(bu));
 		bu.ip6mhbu_flags = bce_flags;
@@ -918,8 +921,12 @@ static int bcache_vt_cmd_bc_mod(const struct vt_handle *vh, const char *str,
 			ab.remote_coa = NULL;
 		ab.bind_coa = NULL;
 
-		err = ha_recv_bu_main((struct ip6_mh *)&bu, sizeof(bu), &ab, 0,
-				      flags);
+		if (bu.ip6mhbu_flags & IP6_MH_BU_HOME)
+			err = ha_recv_home_bu(mh, len, &ab, 0, flags);
+		else {
+			cn_recv_bu(mh, len, &ab, 0);
+			err = 0;
+		}
 	}
 	if (err < 0)
 		fprintf(vh->vh_stream, "bc error=%d(%s)\n",
