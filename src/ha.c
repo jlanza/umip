@@ -883,13 +883,12 @@ restart:
 				goto send_nack;
 			}
 			if (bce->type == BCE_DAD) {
+				/* DAD is ongoing, so we already received
+				 * a BU. There is no need to do anything
+				 * for that reemission. */
 				bcache_release_entry(bce);
-				pthread_mutex_lock(&bu_worker_mutex);
-				list_add_tail(&arg->list, &bu_worker_list);
-				bu_worker_count--;
-				*(arg->statusp) = -EBUSY;
-				pthread_mutex_unlock(&bu_worker_mutex);
-				pthread_exit(NULL);
+				status = -EBUSY;
+				goto out;
 			}
 			if (!MIP6_SEQ_GT(seqno, bce->seqno)) {
 				if (arg->flags & HA_BU_F_PASSIVE_SEQ) {
