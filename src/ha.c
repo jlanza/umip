@@ -1101,18 +1101,20 @@ restart:
 	if (new && tsisset(lft))
 		mpd_start_mpa(&bce->our_addr, &bce->peer_addr);
 out:
-	free(arg);
 	pthread_mutex_lock(&bu_worker_mutex);
 	if (!list_empty(&bu_worker_list)) {
 		struct list_head *l = bu_worker_list.next;
 		list_del(l);
+		free(arg);
 		arg = list_entry(l, struct ha_recv_bu_args, list);
 		pthread_mutex_unlock(&bu_worker_mutex);
 		goto restart;
 	}
 	if (--bu_worker_count == 0)
 		pthread_cond_signal(&cond);
-	*(arg->statusp) = status;
+	if (arg->flags & HA_BU_F_THREAD_JOIN)
+		*(arg->statusp) = status;
+	free(arg);
 	pthread_mutex_unlock(&bu_worker_mutex);
 	pthread_exit(NULL);
 send_nack:
