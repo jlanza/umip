@@ -665,12 +665,57 @@ static inline int link_flags_changed(unsigned int nf, unsigned int of)
 	return (nf & (IFF_UP|IFF_RUNNING)) != (of & (IFF_UP|IFF_RUNNING));
 }
 
+/* Look for interface by name (if any) in the list of interfaces
+ * referenced in the configuration and update its ifindex as the
+ * interface is now available (dongle/adapter was plugged) */
+static void iface_ifindex_update(int ifindex)
+{
+	char ifname[IF_NAMESIZE];
+	struct list_head *list;
+
+	/* We need the name of the interface to find it and
+	 * update its ifindex */
+	if (if_indextoname(ifindex, ifname) == NULL)
+		return;
+
+	list_for_each(list, &conf.net_ifaces) {
+		struct net_iface *nif;
+		nif = list_entry(list, struct net_iface, list);
+		if (strncmp(ifname, nif->name, IF_NAMESIZE-1) == 0) {
+			nif->ifindex = ifindex;
+			break;
+		}
+	}
+}
+
+/* Look for interface by ifindex in the list of interfaces referenced
+ * by configuration and invalidate its ifindex as the interface was
+ * removed */
+static void iface_ifindex_invalidate(int ifindex)
+{
+	struct list_head *list;
+
+	/* Invalidate ifindex for that interface */
+	list_for_each(list, &conf.net_ifaces) {
+		struct net_iface *nif;
+		nif = list_entry(list, struct net_iface, list);
+		if (nif->ifindex == ifindex) {
+			nif->ifindex = 0;
+			break;
+		}
+	}
+}
+
 static int process_new_inet6_iface(struct ifinfomsg *ifi,
 				   struct rtattr **rta_tb)
 {
 	struct md_inet6_iface *iface;
+
 	if ((iface = md_get_inet6_iface(&ifaces, ifi->ifi_index)) == NULL) {
 		unsigned int pref;
+
+		iface_ifindex_update(ifi->ifi_index);
+
 		if ((pref = conf.pmgr.accept_inet6_iface(ifi->ifi_index)) &&
 		    (iface = md_create_inet6_iface(ifi, rta_tb)) != NULL) {
 			MDBG2("adding iface %s (%d)\n",
@@ -699,6 +744,7 @@ process_del_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 		MDBG2("deleting iface %s (%d)\n", iface->name, iface->ifindex);
 		md_expire_inet6_iface(iface);
 		md_free_inet6_iface(iface);
+		iface_ifindex_invalidate(ifi->ifi_index);
 	}
 	return 0;
 }

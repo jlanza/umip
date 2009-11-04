@@ -68,7 +68,10 @@ specify which interfaces are used for HA operation.  For the home
 agent to function properly, a Router Advertisement daemon (e.g. radvd)
 must broadcast advertisements with the Home Agent bit and Home Agent
 Information Option set on these interfaces.  This option is also
-used by multihomed Mobile Nodes to define which interfaces are used by it.
+used by multihomed Mobile Nodes to define which interfaces are used by
+it. For MN and CN, it is posible to provide interfaces that are not
+already available when the daemon is started. Those will be used when
+available.
 
 .B MnIfPreference
 sets the interface preference value for an interface in a multi-homed

@@ -357,10 +357,15 @@ ifacedef	: QSTRING ifacesub
 			struct net_iface *nni;
 			strncpy(ni.name, $1, IF_NAMESIZE - 1);
 			ni.ifindex = if_nametoindex($1);
-			free($1);
 			if (ni.ifindex <= 0) {
-				uerror("invalid interface");
-				return -1;
+				if (is_if_ha(&ni)) {
+					/* We do not allow unavailable ifaces for HA ... */
+					uerror("HA interface %s unavailable", $1);
+					free($1);
+					return -1;
+				}
+				/* ... but allow them for CN and MN */
+				free($1);
 			}
 			nni = malloc(sizeof(struct net_iface));
 			if (nni == NULL) {
