@@ -204,34 +204,6 @@ static int nd_get_l2addr(int ifindex, uint8_t *addr)
 	return res;
 }
 
-/* Adapted from RFC 1071 "C" Implementation Example */
-static uint16_t csum(const void *phdr, const void *data, socklen_t datalen)
-{
-	register unsigned long sum = 0;
-	socklen_t count;
-	uint16_t *addr;
-	int i;
-
-	/* caller must make sure datalen is even */
-
-	addr = (uint16_t *)phdr;
-	for (i = 0; i < 20; i++)
-		sum += *addr++;
-
-	count = datalen;
-	addr = (uint16_t *)data;
-
-        while (count > 1) {
-		sum += *(addr++);
-		count -= 2;
-	}
-
-	while (sum >> 16)
-		sum = (sum & 0xffff) + (sum >> 16);
-
-	return (uint16_t)~sum;
-}
-
 /* Linearize 'iov' of 'iovlen' elements in 'dst' buffer of available size
  * 'dstlen'. The number of bytes written to dst is returned in 'written'
  * if everything went ok. 0 is returned on success, -1 on error. */
@@ -271,14 +243,6 @@ static int ndisc_send_unspec(int oif, const struct in6_addr *dest,
 			     uint8_t *hdr, int hdrlen, struct iovec *optv,
 			     size_t optvlen)
 {
-	struct _phdr {
-		struct in6_addr src;
-		struct in6_addr dst;
-		uint32_t plen;
-		uint8_t reserved[3];
-		uint8_t nxt;
-	} phdr;
-
 	struct {
 		struct ip6_hdr ip;
 		struct icmp6_hdr icmp;
@@ -329,17 +293,11 @@ static int ndisc_send_unspec(int oif, const struct in6_addr *dest,
 	frame.ip.ip6_plen = htons(datalen);
 	frame.ip.ip6_nxt = IPPROTO_ICMPV6;
 	frame.ip.ip6_hlim = 255;
-	frame.ip.ip6_dst = dst.sin6_addr;
+	frame.ip.ip6_dst = *dest;
 	/* all other fields are already set to zero */
 
-	/* Prepare pseudo header for csum */
-	memset(&phdr, 0, sizeof(phdr));
-	phdr.dst = dst.sin6_addr;
-	phdr.plen = htonl(datalen);
-	phdr.nxt = IPPROTO_ICMPV6;
-
-	/* Fill in remaining ICMP header fields */
-	frame.icmp.icmp6_cksum = csum(&phdr, &frame.icmp, datalen);
+	frame.icmp.icmp6_cksum = in6_cksum(&in6addr_any, dest, &frame.icmp,
+					   datalen, IPPROTO_ICMPV6);
 
 	iov.iov_base = &frame;
 	iov.iov_len = sizeof(frame.ip) + datalen;

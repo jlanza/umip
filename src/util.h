@@ -207,6 +207,9 @@ static inline long max(long a, long b)
 	return (a > b) ? a : b;
 }
 
+uint16_t in6_cksum(const struct in6_addr *src, const struct in6_addr *dst,
+		   const void *data, socklen_t datalen, uint8_t nh);
+
 /*
  * XXX: These may be missing on kernel header because either kernel is not
  * ready or should be removed since kernel will never support it.

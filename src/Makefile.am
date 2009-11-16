@@ -25,7 +25,7 @@ mip6d_SOURCES = pmgr.c pmgr.h defpath.h \
 		gram.y scan.l \
 		tqueue.c tqueue.h \
 		icmp6.c icmp6.h \
-		list.h util.h \
+		list.h util.c util.h \
 		hash.c hash.h \
 		debug.c debug.h \
 		dhaad_ha.c dhaad_ha.h \
