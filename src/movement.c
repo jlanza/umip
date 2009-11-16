@@ -548,7 +548,7 @@ static void __md_discover_router(struct md_inet6_iface *iface)
 	if (md_is_link_up(iface) && 
 	    iface->router_solicits++ <= iface->devconf[DEVCONF_RTR_SOLICITS]) {
 		struct timespec exp_in;
-		ndisc_send_rs(iface->ifindex, &in6addr_all_routers_mc);
+		ndisc_send_rs(iface->ifindex, &in6addr_all_routers_mc, NULL, 0);
 		tssetsec(exp_in, iface->devconf[DEVCONF_RTR_SOLICIT_INTERVAL]);
 		add_task_rel(&exp_in, &iface->tqe, md_discover_router);
 	}
@@ -1777,7 +1777,7 @@ void md_cleanup(void)
 		iface = list_entry(l, struct md_inet6_iface, list);
 		md_expire_inet6_iface(iface);
 		iface_proc_entries_cleanup(iface);
-		ndisc_send_rs(iface->ifindex, &in6addr_all_routers_mc);
+		ndisc_send_rs(iface->ifindex, &in6addr_all_routers_mc, NULL, 0);
 		md_free_inet6_iface(iface);
 	}
 	pthread_mutex_unlock(&iface_lock);

@@ -322,7 +322,7 @@ void ha_discover_routers(void)
 	list_for_each(lp, &ha_interfaces) {
 		struct ha_interface *i;
 		i = list_entry(lp, struct ha_interface, iflist);
-		ndisc_send_rs(i->ifindex, &in6addr_all_routers_mc);
+		ndisc_send_rs(i->ifindex, &in6addr_all_routers_mc, NULL, 0);
 	}
 }
 

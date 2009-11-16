@@ -63,7 +63,8 @@ static inline int ndisc_set_linklocal(struct in6_addr *lladdr, uint8_t *hwa,
 
 int ndisc_do_dad(int ifi, struct in6_addr *addr, int ll);
 
-int ndisc_send_rs(int ifindex, const struct in6_addr *dst);
+int ndisc_send_rs(int ifindex, const struct in6_addr *dst,
+		  struct iovec *opts, size_t optslen);
 
 int ndisc_send_ns(int ifindex, const struct in6_addr *target);
 

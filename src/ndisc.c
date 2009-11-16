@@ -232,7 +232,43 @@ static uint16_t csum(const void *phdr, const void *data, socklen_t datalen)
 	return (uint16_t)~sum;
 }
 
-static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest) 
+/* Linearize 'iov' of 'iovlen' elements in 'dst' buffer of available size
+ * 'dstlen'. The number of bytes written to dst is returned in 'written'
+ * if everything went ok. 0 is returned on success, -1 on error. */
+static int iov_linearize(uint8_t *dst, int dstlen, struct iovec *iov,
+			 size_t iovlen, int *written) {
+	int i = 0, l;
+	int rem = dstlen;
+	uint8_t *data = dst;
+	struct iovec cur;
+
+	if (iov == NULL || iovlen == 0)
+		return 0;
+
+	cur = iov[i];
+
+	while ((i < iovlen) && ((l = cur.iov_len) <= rem)) {
+		if (cur.iov_base == NULL)
+			return -1;
+
+		memcpy(data, cur.iov_base, l);
+		cur = iov[++i];
+		rem  -= l;
+		data += l;
+	}
+
+	if (i != iovlen) { /* Someone left behind? */
+		dbg("Not enough space to linearize iov\n");
+		return -1;
+	}
+
+	*written = dstlen - rem;
+
+	return 0;
+}
+
+static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest,
+			     struct iovec *optv, size_t optvlen)
 {
 	struct _phdr {
 		struct in6_addr src;
@@ -244,11 +280,8 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 
 	struct {
 		struct ip6_hdr ip;
-		union {
-			struct icmp6_hdr icmp;
-			struct nd_neighbor_solicit ns;
-			struct nd_router_solicit rs;
-		} i;
+		struct icmp6_hdr icmp;
+		uint8_t data[1500];
 	} frame;
 
 	struct msghdr msgh;
@@ -256,14 +289,16 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 	struct in6_pktinfo *pinfo;
 	struct sockaddr_in6 dst;
 	char cbuf[CMSG_SPACE(sizeof(*pinfo))];
+	struct nd_neighbor_solicit *ns;
+	struct nd_router_solicit *rs;
 	struct iovec iov;
-	int fd, datalen, ret, val = 1;
+	uint8_t *data;
+	int fd, ret, datalen, remlen, written = 0, v = 1;
 
-	fd = socket(AF_INET6, SOCK_RAW, IPPROTO_RAW);
-	if (fd < 0) return -1;
+	if ((fd = socket(AF_INET6, SOCK_RAW, IPPROTO_RAW)) < 0)
+		return -1;
 
-	if (setsockopt(fd, IPPROTO_IPV6, IP_HDRINCL,
-		       &val, sizeof(val)) < 0) {
+	if (setsockopt(fd, IPPROTO_IPV6, IP_HDRINCL, &v, sizeof(v)) < 0) {
 		dbg("cannot set IP_HDRINCL: %s\n", strerror(errno));
 		close(fd);
 		return -errno;
@@ -273,16 +308,27 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 	memset(&dst, 0, sizeof(dst));
 
 	if (type == ND_NEIGHBOR_SOLICIT) {
-		datalen = sizeof(frame.i.ns); /* 24, csum() safe */
-		frame.i.ns.nd_ns_target = *dest;
+		ns = (struct nd_neighbor_solicit *)(&frame.icmp);
+		datalen = sizeof(*ns);
+		ns->nd_ns_target = *dest;
 		ipv6_addr_solict_mult(dest, &dst.sin6_addr);
+		data = (uint8_t *)(ns + 1);
 	} else if (type == ND_ROUTER_SOLICIT) {
-		datalen = sizeof(frame.i.rs); /* 8, csum() safe */
+		rs = (struct nd_router_solicit *)(&frame.icmp);
+		datalen = sizeof(*rs);
 		dst.sin6_addr = *dest;
+		data = (uint8_t *)(rs + 1);
 	} else {
 		close(fd);
 		return -EINVAL;
 	}
+
+	/* Prepare for csum: write trailing options by linearizing iov */
+	remlen = sizeof(frame) - sizeof(struct ip6_hdr) - datalen;
+	if ((iov_linearize(data, remlen, optv, optvlen, &written) != 0) ||
+	    (written & 0x1)) /* Ensure length is even for csum() */
+		return -1;
+	datalen += written;
 
 	/* Fill in the IPv6 header */
 	frame.ip.ip6_vfc = 0x60;
@@ -299,8 +345,8 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 	phdr.nxt = IPPROTO_ICMPV6;
 
 	/* Fill in remaining ICMP header fields */
-	frame.i.icmp.icmp6_type = type;
-	frame.i.icmp.icmp6_cksum = csum(&phdr, &frame.i, datalen);
+	frame.icmp.icmp6_type = type;
+	frame.icmp.icmp6_cksum = csum(&phdr, &frame.icmp, datalen);
 
 	iov.iov_base = &frame;
 	iov.iov_len = sizeof(frame.ip) + datalen;
@@ -331,14 +377,17 @@ static int ndisc_send_unspec(int type, int oif, const struct in6_addr *dest)
 	return ret;
 }
 
-int ndisc_send_rs(int ifindex, const struct in6_addr *dst)
+int ndisc_send_rs(int ifindex, const struct in6_addr *dst,
+		  struct iovec *opts, size_t optslen)
 {
-	return ndisc_send_unspec(ND_ROUTER_SOLICIT, ifindex, dst);
+	return ndisc_send_unspec(ND_ROUTER_SOLICIT, ifindex,
+				 dst, opts, optslen);
 }
 
 int ndisc_send_ns(int ifindex, const struct in6_addr *target)
 {
-	return ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifindex, target);
+	return ndisc_send_unspec(ND_NEIGHBOR_SOLICIT, ifindex,
+				 target, NULL, 0);
 }
 
 int ndisc_send_na(int ifindex, const struct in6_addr *src, 
