@@ -1804,8 +1804,8 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	int len, iif, hoplimit;
 	struct nd_neighbor_advert *na;
 	uint8_t *hwa = NULL;
-	int ret, hwalen;
-	
+	int ret, hwalen = 0;
+
 	len = icmp6_recv(fd, msg, sizeof(msg), &saddr, &pkt_info, &hoplimit);
 
 	if (len < 0)
