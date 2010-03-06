@@ -649,7 +649,8 @@ int mn_rr_error_check(const struct in6_addr *own,
 }
 
 static void mn_recv_cot(const struct ip6_mh *mh, ssize_t len,
-			const struct in6_addr_bundle *in, int iif)
+			const struct in6_addr_bundle *in,
+			__attribute__ ((unused)) int iif)
 {
 	struct in6_addr *cn_addr = in->src;
 	struct in6_addr *co_addr = in->dst;
@@ -661,7 +662,8 @@ static void mn_recv_cot(const struct ip6_mh *mh, ssize_t len,
 	struct ip6_mh_careof_test *ct;
 	struct list_head *list, *n;
 
-	if (len < sizeof(struct ip6_mh_careof_test) || in->remote_coa)
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_careof_test) ||
+	    in->remote_coa)
 		return;
 
 	ct = (struct ip6_mh_careof_test *)mh;
@@ -739,7 +741,8 @@ static struct mh_handler mn_cot_handler = {
 
 /* mh_hot_recv - handles MH HoT msg */
 static void mn_recv_hot(const struct ip6_mh *mh, ssize_t len,
-			const struct in6_addr_bundle *in, int iif)
+			const struct in6_addr_bundle *in,
+			__attribute__ ((unused)) int iif)
 {
 	struct in6_addr *cn_addr = in->src;
 	struct in6_addr *home_addr = in->dst;
@@ -751,7 +754,8 @@ static void mn_recv_hot(const struct ip6_mh *mh, ssize_t len,
 	struct bulentry *bule = NULL;
 	struct ip6_mh_home_test *ht;
 
-	if (len < sizeof(struct ip6_mh_home_test) || in->remote_coa)
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_home_test) ||
+	    in->remote_coa)
 		return;
 
 	ht = (struct ip6_mh_home_test *)mh;
@@ -829,7 +833,7 @@ int rr_init(void)
 	return 0;
 }
 
-static int rre_cleanup(void *vbule, void *dummy)
+static int rre_cleanup(void *vbule, __attribute__ ((unused)) void *dummy)
 {
 	BUG("rrl_hash should be empty");
 	rrl_delete(vbule);

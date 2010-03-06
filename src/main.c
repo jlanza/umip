@@ -58,7 +58,7 @@
 #endif
 #include "tunnelctl.h"
 
-static void sig_child(int unused)
+static void sig_child(__attribute__ ((unused)) int unused)
 {
 	int pid, status;
 
@@ -131,7 +131,7 @@ static void daemon_start(int ignsigcld)
 	}
 }
 
-static void *sigh(void *arg)
+static void *sigh(__attribute__ ((unused)) void *arg)
 {
 	int signum;
 	sigset_t sigcatch;

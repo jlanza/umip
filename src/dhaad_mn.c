@@ -232,8 +232,10 @@ int dhaad_home_reg_failed(struct home_addr_info *hai)
 }
 
 static void dhaad_recv_rep(const struct icmp6_hdr *ih, ssize_t len,
-			   const struct in6_addr *src,
-			   const struct in6_addr *dst, int iif, int hoplimit)
+			   __attribute__ ((unused)) const struct in6_addr *src,
+			   __attribute__ ((unused)) const struct in6_addr *dst,
+			   int iif,
+			   __attribute__ ((unused)) int hoplimit)
 {
 	struct mip_dhaad_rep *rph = (struct mip_dhaad_rep *)ih;
 	int i;

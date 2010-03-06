@@ -98,7 +98,7 @@ static int vt_server_fini(void);
 static int vt_connect_close(struct vt_handle *vh);
 
 /* Find a handle which is able to be modified */
-static struct vt_handle *vt_handle_get(const struct vt_handle *vh)
+static struct vt_handle *vt_handle_get(void)
 {
 	return vt_connect_handle;
 }
@@ -147,78 +147,88 @@ static const char *bool_str(vt_bool_t b)
 	return b == VT_BOOL_TRUE ? yes : no;
 }
 
-static int vt_cmd_sys_fancy_off(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_fancy_off(const struct vt_handle *vh,
+				__attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	sysvh->vh_opt.fancy = VT_BOOL_FALSE;
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.fancy));
 	return 0;
 }
 
-static int vt_cmd_sys_fancy_on(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_fancy_on(const struct vt_handle *vh,
+			       __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	sysvh->vh_opt.fancy = VT_BOOL_TRUE;
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.fancy));
 	return 0;
 }
 
-static int vt_cmd_sys_fancy(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_fancy(const struct vt_handle *vh,
+			    __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.fancy));
 	return 0;
 }
 
-static int vt_cmd_sys_verbose_off(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_verbose_off(const struct vt_handle *vh,
+				  __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	sysvh->vh_opt.verbose = VT_BOOL_FALSE;
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.verbose));
 	return 0;
 }
 
-static int vt_cmd_sys_verbose_on(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_verbose_on(const struct vt_handle *vh,
+				 __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	sysvh->vh_opt.verbose = VT_BOOL_TRUE;
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.verbose));
 	return 0;
 }
 
-static int vt_cmd_sys_verbose(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_verbose(const struct vt_handle *vh,
+			      __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.verbose));
 	return 0;
 }
 
-static int vt_cmd_sys_prompt_off(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_prompt_off(const struct vt_handle *vh,
+				 __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	sysvh->vh_opt.prompt = VT_BOOL_FALSE;
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.prompt));
 	return 0;
 }
 
-static int vt_cmd_sys_prompt_on(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_prompt_on(const struct vt_handle *vh,
+				__attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	sysvh->vh_opt.prompt = VT_BOOL_TRUE;
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.prompt));
 	return 0;
 }
 
-static int vt_cmd_sys_prompt(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_prompt(const struct vt_handle *vh,
+			     __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 	fprintf(vh->vh_stream, "%s\n", bool_str(sysvh->vh_opt.prompt));
 	return 0;
 }
 
-static int vt_cmd_sys_quit(const struct vt_handle *vh, const char *str)
+static int vt_cmd_sys_quit(const struct vt_handle *vh,
+			   __attribute__ ((unused)) const char *str)
 {
-	struct vt_handle *sysvh = vt_handle_get(vh);
+	struct vt_handle *sysvh = vt_handle_get();
 
 	if (strlen(str) > 0) {
 		int ret = fprintf(vh->vh_stream, "unknown args\n");
@@ -696,7 +706,7 @@ static int bcache_vt_dump(void *data, void *arg)
 static int vt_str_to_uint32(const struct vt_handle *vh, const char *str,
 			    uint32_t *val)
 {
-	long int v;
+	unsigned long int v;
 	char *ptr = NULL;
 
 	v = strtoul(str, &ptr, 0);
@@ -1121,7 +1131,7 @@ static int vt_cmd_match(struct vt_cmd_entry *e, const char *cmd)
 /*
  * It is only used the parser which is the final level away from root.
  */
-static int vt_cmd_input(const struct vt_handle *vh, char *line, ssize_t len)
+static int vt_cmd_input(const struct vt_handle *vh, char *line)
 {
 	struct vt_cmd_entry *ce = &vt_cmd_root;
 	const char *p;
@@ -1221,7 +1231,7 @@ static int vt_connect_input(struct vt_handle *vh, void *data, ssize_t len)
 	memcpy(line, data, len);
 	line[len - 1] = 0;
 
-	ret = vt_cmd_input(vh, line, len);
+	ret = vt_cmd_input(vh, line);
 
 	if (ret != 0)
 		goto fin;
@@ -1393,7 +1403,7 @@ static int vt_connect_init(const struct vt_server_entry *vse)
 	return 0; /* ignore error here */
 }
 
-static void *vt_server_recv(void *arg)
+static void *vt_server_recv(__attribute__ ((unused)) void *arg)
 {
 	pthread_dbg("thread started");
 
@@ -1463,7 +1473,7 @@ static int vt_server_clean(const struct sockaddr *sa, int salen)
 {
 	if (sa->sa_family == AF_LOCAL) {
 		const struct sockaddr_un *sun;
-		if (salen >= sizeof(*sun)) {
+		if (salen >= 0 && (size_t)salen >= sizeof(*sun)) {
 			sun = (const struct sockaddr_un *)sa;
 			if (unlink(sun->sun_path))
 				errno = 0; /* ignore error here */

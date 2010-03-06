@@ -444,7 +444,7 @@ int tunnelctl_init(void)
 }
 
 
-static int tnl_cleanup(void *data, void *arg)
+static int tnl_cleanup(void *data, __attribute__ ((unused)) void *arg)
 {
 	struct mip6_tnl *tnl = (struct mip6_tnl *) data;
 	list_del(&tnl->list);

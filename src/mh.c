@@ -125,7 +125,7 @@ void mh_handler_dereg(uint8_t type, struct mh_handler *handler)
 	pthread_rwlock_unlock(&handler_lock);
 }
 
-static void *mh_listen(void *arg)
+static void *mh_listen(__attribute__ ((unused)) void *arg)
 {
 	uint8_t msg[MAX_PKT_LEN];
 	struct in6_pktinfo pktinfo;
@@ -142,10 +142,10 @@ static void *mh_listen(void *arg)
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 		len = mh_recv(msg, sizeof(msg), &addr, &pktinfo, &haoa, &rta);
 		/* check if socket has closed */
-		if (len == -EBADF)
+		if (len < 0)
 			break;
 		/* common validity check */
-		if (len < sizeof(struct ip6_mh))
+		if ((size_t)len < sizeof(struct ip6_mh))
 			continue;
 		addrs.src = &addr.sin6_addr;
 		addrs.dst = &pktinfo.ipi6_addr;
@@ -781,10 +781,11 @@ int mh_opt_parse(const struct ip6_mh *mh, ssize_t len, ssize_t offset,
 			i++;
 			continue;
 		} 
-		if (left < sizeof(struct ip6_mh_opt) ||
+		if ((size_t)left < sizeof(struct ip6_mh_opt) ||
 		    mh_opt_len_chk(op->ip6mhopt_type, op->ip6mhopt_len + 2)) {
 			syslog(LOG_ERR,
-			       "Kernel failed to catch malformed Mobility Option type %d. Update kernel!",
+			       "Kernel failed to catch malformed Mobility"
+			       "Option type %d. Update kernel!",
 			       op->ip6mhopt_type);
 			return -EINVAL;
 		}
@@ -1029,8 +1030,8 @@ int mh_bu_parse(struct ip6_mh_binding_update *bu, ssize_t len,
 	struct ip6_mh_opt_altcoa *alt_coa;
 
 	MDBG("Binding Update Received\n");
-	if (len < sizeof(struct ip6_mh_binding_update) ||
-	    mh_opt_parse(&bu->ip6mhbu_hdr, len, 
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_binding_update) ||
+	    mh_opt_parse(&bu->ip6mhbu_hdr, len,
 			 sizeof(struct ip6_mh_binding_update), mh_opts) < 0)
 		return -1;
 			 

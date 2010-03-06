@@ -1,7 +1,7 @@
 ## $Id: Makefile.am 1.55 06/05/07 17:37:11+03:00 anttit@tcs.hut.fi $
 ## Process this file with automake to produce Makefile.in
 
-AM_CFLAGS = -Wall -Wpointer-arith -Wreturn-type -pedantic -std=gnu99
+AM_CFLAGS = -Wall -Wextra -Wpointer-arith -Wreturn-type -pedantic -std=gnu99
 AM_CPPFLAGS = -isystem ../include
 AM_YFLAGS = -d
 

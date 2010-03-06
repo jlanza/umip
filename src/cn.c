@@ -61,9 +61,10 @@ const struct timespec cn_brr_before_expiry_ts =
 { CN_BRR_BEFORE_EXPIRY, 0 };
 
 static void cn_recv_dst_unreach(const struct icmp6_hdr *ih, ssize_t len,
-				const struct in6_addr *src, 
-				const struct in6_addr *dst,
-				int iif, int hoplimit)
+				__attribute__ ((unused)) const struct in6_addr *src,
+				__attribute__ ((unused)) const struct in6_addr *dst,
+				__attribute__ ((unused)) int iif,
+				__attribute__ ((unused)) int hoplimit)
 {
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)(ih + 1);
 	int optlen = len - sizeof(struct icmp6_hdr);
@@ -106,7 +107,8 @@ static void cn_recv_hoti(const struct ip6_mh *mh, ssize_t len,
 	struct iovec iov;
 	uint8_t keygen_token[8];
 
-	if (len < sizeof(struct ip6_mh_home_test_init) || in->remote_coa)
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_home_test_init) ||
+	    in->remote_coa)
 		return;
 	out.src = in->dst;
 	out.dst = in->src;
@@ -136,7 +138,8 @@ static void cn_recv_coti(const struct ip6_mh *mh, ssize_t len,
 	struct iovec iov;
 	uint8_t keygen_token[8];
 
-	if (len < sizeof(struct ip6_mh_careof_test_init) || in->remote_coa)
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_careof_test_init) ||
+	    in->remote_coa)
 		return;
 	out.src = in->dst;
 	out.dst = in->src;

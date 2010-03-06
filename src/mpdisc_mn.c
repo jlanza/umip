@@ -194,7 +194,9 @@ out:
 
 static void mpd_recv_mpa(const struct icmp6_hdr *ih, ssize_t len,
 			 const struct in6_addr *src,
-			 const struct in6_addr *dst, int iif, int hoplimit)
+			 const struct in6_addr *dst,
+			 __attribute__ ((unused)) int iif,
+			 __attribute__ ((unused)) int hoplimit)
 {
 	uint8_t *opt = (uint8_t *)(ih + 1);
 	struct mps_entry *e;
@@ -224,9 +226,9 @@ static void mpd_recv_mpa(const struct icmp6_hdr *ih, ssize_t len,
 	if (hai != NULL) {
 		int optlen = len - sizeof(struct icmp6_hdr);
 		while (optlen > 1) {
-			int olen = opt[1] << 3;
+			uint16_t olen = opt[1] << 3;
 			
-			if (olen > optlen || olen == 0)
+			if (olen > (unsigned int)optlen || olen == 0)
 				break;
 
 			if (opt[0] == ND_OPT_PREFIX_INFORMATION) {

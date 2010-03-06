@@ -234,9 +234,10 @@ static void mn_rr_check_entry(struct tq_elem *tqe)
 }
 
 static void mn_recv_param_prob(const struct icmp6_hdr *ih, ssize_t len,
-			       const struct in6_addr *src,
+			       __attribute__ ((unused)) const struct in6_addr *src,
 			       const struct in6_addr *dst,
-			       int iif, int hoplimit)
+			       __attribute__ ((unused)) int iif,
+			       __attribute__ ((unused)) int hoplimit)
 {
 	struct ip6_hdr *ip6h = (struct ip6_hdr *)(ih + 1);
 	int optlen = len - sizeof(struct icmp6_hdr);
@@ -256,7 +257,8 @@ static void mn_recv_param_prob(const struct icmp6_hdr *ih, ssize_t len,
 	errptr = ntohl(ih->icmp6_pptr);
 
 	/* Validity checks */
-	if (len <= errptr || !IN6_ARE_ADDR_EQUAL(laddr, dst) ||
+	if (len < 0 ||
+	    (uint32_t)len <= errptr || !IN6_ARE_ADDR_EQUAL(laddr, dst) ||
 	    icmp6_parse_data(ip6h, optlen, &laddr, &raddr) < 0)
 		return;
 
@@ -432,7 +434,7 @@ static int mn_get_ro_lifetime(struct home_addr_info *hai,
 	return 1;
 }
 
-static int mn_dereg(void *vbule, void *arg)
+static int mn_dereg(void *vbule, __attribute__ ((unused)) void *arg)
 {
 	struct bulentry *bule = vbule;
 
@@ -609,7 +611,8 @@ static int mv_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 		valid = ci->ifa_valid;
 		preferred = ci->ifa_prefered;
 	}
-	if (mha->if_next == ifa->ifa_index)
+
+	if (mha->if_next >= 0 && (unsigned int)mha->if_next == ifa->ifa_index)
 		return 0;
 
 	MDBG("move HoA %x:%x:%x:%x:%x:%x:%x:%x/%d from iface %d to %d\n",
@@ -1021,7 +1024,8 @@ static int mn_chk_bauth(struct ip6_mh_binding_ack *ba, ssize_t len,
 }
 
 static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
-		       const struct in6_addr_bundle *in, int iif)
+		       const struct in6_addr_bundle *in,
+		       __attribute__ ((unused)) int iif)
 {
 	struct ip6_mh_binding_ack *ba;
 	struct mh_options mh_opts;
@@ -1031,7 +1035,7 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 
 	TRACE;
 
-	if (len < sizeof(struct ip6_mh_binding_ack) ||
+	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_binding_ack) ||
 	    mh_opt_parse(mh, len,
 			 sizeof(struct ip6_mh_binding_ack), &mh_opts) < 0)
 	    return;
@@ -1309,8 +1313,12 @@ static int flag_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
 	struct timespec now;
 	uint32_t preferred;
 	uint32_t valid;
-	int err;
-	int plen = (ifa->ifa_index == hai->if_tunnel ? 128 : hai->plen);
+	int err, plen;
+
+	if (hai->if_tunnel >= 0 && ifa->ifa_index == (uint32_t)hai->if_tunnel)
+		plen = 128;
+	else
+		plen = hai->plen;
 
 	clock_gettime(CLOCK_REALTIME, &now);
 
@@ -1592,7 +1600,9 @@ static int mn_home_reg_addr_expires(struct bulentry *e, struct mn_addr *addr)
 	return 1;
 }
 
-static int update_hoa(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
+static int update_hoa(struct ifaddrmsg *ifa,
+		      __attribute__ ((unused)) struct rtattr *rta_tb[],
+		      void *arg)
 {
 	struct home_addr_info *hai = arg;
 
@@ -1717,7 +1727,8 @@ static inline int linklocal_rt_rules_add(void)
 			&linklocal_prefix, 64, &in6addr_any, 0, 0);
 }
 
-static int mn_ext_tunnel_ops(int request, int old_if, int new_if, void *data)
+static int mn_ext_tunnel_ops(__attribute__ ((unused)) int request,
+			     int old_if, int new_if, void *data)
 {
 	struct home_addr_info *hai = data;
 	struct mv_hoa_args mha;
@@ -1794,8 +1805,7 @@ static int mn_move(struct home_addr_info *hai)
 }
 
 static int mn_recv_na(int fd, struct home_addr_info *hai, 
-		      struct in6_addr *addr, int plen,
-		      int ifindex, int has_home_reg)
+		      struct in6_addr *addr, int ifindex, int has_home_reg)
 {
 	unsigned char msg[MAX_PKT_LEN];
 	struct sockaddr_in6 saddr;
@@ -1815,7 +1825,7 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	iif = pkt_info.ipi6_ifindex;
 	na = (struct nd_neighbor_advert *)msg;
 
-	if (iif != ifindex || hoplimit < 255 || len < sizeof(*na) ||
+	if (iif != ifindex || hoplimit < 255 || (size_t)len < sizeof(*na) ||
 	    na->nd_na_code != 0 || IN6_IS_ADDR_MULTICAST(&na->nd_na_target) ||
 	    (na->nd_na_flags_reserved & ND_NA_FLAG_SOLICITED &&
 	     IN6_IS_ADDR_MULTICAST(daddr)))
@@ -1852,7 +1862,8 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	return 0;
 }
 
-int mn_lladdr_dad(struct ifaddrmsg *ifa, struct rtattr *rta_tb[], void *arg)
+int mn_lladdr_dad(struct ifaddrmsg *ifa, struct rtattr *rta_tb[],
+		  __attribute__ ((unused)) void *arg)
 {
 	struct in6_addr *lladdr = RTA_DATA(rta_tb[IFA_ADDRESS]);
 	addr_del(lladdr, ifa->ifa_prefixlen, ifa->ifa_index);
@@ -1945,8 +1956,7 @@ static int mn_addr_do_dad(int fd, struct home_addr_info *hai,
 				return 0;
 			}
 		} else {
-			if (!mn_recv_na(fd, hai, addr, plen,
-					ifindex, has_home_reg))
+			if (!mn_recv_na(fd, hai, addr, ifindex, has_home_reg))
 				continue;
 
 			if (has_home_reg) {
@@ -2362,7 +2372,7 @@ int mn_movement_event(struct movement_event *event)
  * Triggers RR with CN if necessary, else sends BU to CN.
  **/
 
-int mn_rr_start_handoff(void *vbule, void *dummy)
+int mn_rr_start_handoff(void *vbule, __attribute__ ((unused)) void *dummy)
 {
 	struct bulentry *bule = vbule;
 
@@ -2389,7 +2399,7 @@ delete_entry:
 }
 
 /* mn_start_ro - start RO, triggered by tunneled packet */
-void mn_start_ro(struct in6_addr *cn, struct in6_addr *hoa, int iif)
+void mn_start_ro(struct in6_addr *cn, struct in6_addr *hoa)
 {
 	struct bulentry *bule;
 	struct home_addr_info *hai;
@@ -2448,8 +2458,9 @@ void mn_start_ro(struct in6_addr *cn, struct in6_addr *hoa, int iif)
 	pthread_rwlock_unlock(&mn_lock);
 }
 
-static void mn_recv_brr(const struct ip6_mh *mh, ssize_t len,
-			const struct in6_addr_bundle *in, int iif)
+static void mn_recv_brr(__attribute__ ((unused)) const struct ip6_mh *mh,
+			ssize_t len, const struct in6_addr_bundle *in,
+			__attribute__ ((unused)) int iif)
 
 {
 	struct bulentry *e;
@@ -2457,7 +2468,7 @@ static void mn_recv_brr(const struct ip6_mh *mh, ssize_t len,
 	struct timespec now;
 	long last_used;
 
-	if (len < sizeof(struct ip6_mh_binding_request))
+	if (len <  0 || (size_t)len < sizeof(struct ip6_mh_binding_request))
 		return;
 
 	cn = in->src;
@@ -2486,16 +2497,16 @@ static struct mh_handler mn_brr_handler = {
 };
 
 static void mn_recv_be(const struct ip6_mh *mh, ssize_t len,
-		       const struct in6_addr_bundle *in, int iif)
+		       const struct in6_addr_bundle *in,
+		       __attribute__ ((unused)) int iif)
 {
-
 	struct ip6_mh_binding_error *berr;
 	struct bulentry *e;
 	struct in6_addr *cn, *hoa;
 	struct timespec now;
 	struct in6_addr addr;
 
-	if (len < sizeof(struct ip6_mh_binding_error))
+	if (len <  0 || (size_t)len < sizeof(struct ip6_mh_binding_error))
 		return;
 
 	berr = (struct ip6_mh_binding_error *)mh;

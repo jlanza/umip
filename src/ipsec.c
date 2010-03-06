@@ -84,7 +84,7 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 		    int  dst_len,
 		    const struct in6_addr *in6_src,
 		    int src_len,
-		    int ifindex,
+		    __attribute__ ((unused)) int ifindex,
 		    int nodetype)
 {
 	assert(sp);
@@ -268,7 +268,8 @@ int ipsec_policy_apply(const struct in6_addr *haaddr,
 
 int ipsec_policy_dump_config(const struct in6_addr *haaddr,
 			     const struct in6_addr *hoa,
-			     struct ipsec_policy_entry *e, void *arg)
+			     struct ipsec_policy_entry *e,
+			     __attribute__ ((unused)) void *arg)
 {
 	dbg("IPsec: HA address = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(haaddr));
 	dbg("IPsec: Home address = %x:%x:%x:%x:%x:%x:%x:%x\n", NIP6ADDR(hoa));
@@ -1036,7 +1037,7 @@ static int _mn_tnl_pol_mod(const struct in6_addr *haaddr,
 			cn_wildrecv_bu_pol_del();
 			err = mn_ipsec_recv_bu_tnl_pol_add(bule, ifindex, e);
 		} else {
-			mn_ipsec_recv_bu_tnl_pol_del(bule, ifindex, e);
+			mn_ipsec_recv_bu_tnl_pol_del(bule, ifindex);
 			/* restore wildrecv SPD entry for processing BU */
 			err = cn_wildrecv_bu_pol_add();
 		}

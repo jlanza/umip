@@ -157,7 +157,7 @@ int if_mc_group(int sock, int ifindex, const struct in6_addr *mc_addr, int cmd)
 	return setsockopt(sock, IPPROTO_IPV6, cmd, &mreq, sizeof(mreq));
 }
 
-static void *icmp6_listen(void *arg)
+static void *icmp6_listen(__attribute__ ((unused)) void *arg)
 {
 	uint8_t msg[MAX_PKT_LEN];
 	struct sockaddr_in6 addr;
@@ -175,10 +175,10 @@ static void *icmp6_listen(void *arg)
 		len = icmp6_recv(icmp6_sock.fd, msg, sizeof(msg),
 				 &addr, &pkt_info, &hoplimit);
 		/* check if socket has closed */
-		if (len == -EBADF)
+		if (len < 0)
 			break;
 		/* common validity check */
-		if (len < sizeof(struct icmp6_hdr))
+		if ((size_t)len < sizeof(struct icmp6_hdr))
 			continue;
 		saddr = &addr.sin6_addr;
 		daddr = &pkt_info.ipi6_addr;
@@ -382,7 +382,7 @@ ssize_t icmp6_recv(int sockfd, unsigned char *msg, size_t msglen,
 			continue;
 		switch(cmsg->cmsg_type) {
 		case IPV6_HOPLIMIT:
-			*hoplimit = *(int *)CMSG_DATA(cmsg);
+			memcpy(hoplimit, CMSG_DATA(cmsg), sizeof(*hoplimit));
 			break;
 		case IPV6_PKTINFO:
 			memcpy(pkt_info, CMSG_DATA(cmsg), sizeof(*pkt_info));

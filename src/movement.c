@@ -514,7 +514,7 @@ static int process_del_addr(struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 	return res;
 }
 
-static int process_addr(struct nlmsghdr *n, void *arg)
+static int process_addr(struct nlmsghdr *n)
 {
 	struct ifaddrmsg *ifa;
 	struct rtattr *rta_tb[IFA_MAX+1];
@@ -737,7 +737,7 @@ static int process_new_inet6_iface(struct ifinfomsg *ifi,
 }
 
 static int 
-process_del_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
+process_del_inet6_iface(struct ifinfomsg *ifi)
 {
        	struct md_inet6_iface *iface;
 	if ((iface = md_get_inet6_iface(&ifaces, ifi->ifi_index)) != NULL) {
@@ -749,7 +749,7 @@ process_del_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 	return 0;
 }
 
-static int process_link(struct nlmsghdr *n, void *arg)
+static int process_link(struct nlmsghdr *n)
 {
 	struct ifinfomsg *ifi;
 	struct rtattr *rta_tb[IFLA_MAX+1];
@@ -788,7 +788,7 @@ static int process_link(struct nlmsghdr *n, void *arg)
 	if (n->nlmsg_type == RTM_NEWLINK)
 		process_new_inet6_iface(ifi, rta_tb);
 	else if (n->nlmsg_type == RTM_DELLINK)
-		process_del_inet6_iface(ifi, rta_tb);
+		process_del_inet6_iface(ifi);
 	pthread_mutex_unlock(&iface_lock);
 
 	return 0;
@@ -813,7 +813,7 @@ static int process_fail_neigh(struct ndmsg *ndm, struct rtattr **rta_tb)
 	return 0;
 }
 
-static int process_neigh(struct nlmsghdr *n, void *arg)
+static int process_neigh(struct nlmsghdr *n)
 {
 	struct ndmsg *ndm;
 	struct rtattr *rta_tb[NDA_MAX+1];
@@ -837,24 +837,25 @@ static int process_neigh(struct nlmsghdr *n, void *arg)
 	return 0;
 }
 
-static int process_nlmsg(const struct sockaddr_nl *who,
-			 struct nlmsghdr *n, void *arg)
+static int process_nlmsg(__attribute__ ((unused)) const struct sockaddr_nl *who,
+			 struct nlmsghdr *n,
+			 __attribute__ ((unused)) void *arg)
 {
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	switch (n->nlmsg_type) {
 	case RTM_NEWLINK:
 	case RTM_DELLINK:
 		/* interface or link, up or down */ 
-		process_link(n, arg);
+		process_link(n);
 		break;
 	case RTM_NEWNEIGH:
 		/* changes in reachability state of default router */
-		process_neigh(n, arg);
+		process_neigh(n);
 		break;
 	case RTM_NEWADDR:
 	case RTM_DELADDR:
 		/* new or deleted CoAs */
-		process_addr(n, arg);
+		process_addr(n);
 		break;
 	default:
 		/* To do: listen to changes in default and prefix routes(?) */
@@ -925,9 +926,9 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 	INIT_LIST_HEAD(&new->tqe.list);
 
 	while (optlen > 1) {
-		int olen = opt[1] << 3;
+		uint16_t olen = opt[1] << 3;
 
-		if (olen > optlen || olen == 0) 
+		if (olen > (unsigned int)optlen || olen == 0)
 			goto free_rtr;
 		switch (opt[0]) {
 			struct nd_opt_prefix_info *pinfo;
@@ -1539,7 +1540,7 @@ md_check_default_router(struct md_inet6_iface *iface, struct md_router *new)
 }
 
 static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
-		       const struct in6_addr *saddr,
+		       __attribute__ ((unused)) const struct in6_addr *saddr,
 		       const struct in6_addr *daddr, int iif, int hoplimit)
 {
 	struct nd_neighbor_advert *na = (struct nd_neighbor_advert *)ih;
@@ -1550,7 +1551,7 @@ static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
 	uint8_t *hwa;
 
 	if (hoplimit < 255 || ih->icmp6_code != 0 ||
-	    len < sizeof(struct nd_neighbor_advert) ||
+	    len < 0 || (size_t)len < sizeof(struct nd_neighbor_advert) ||
 	    IN6_IS_ADDR_MULTICAST(&na->nd_na_target) ||
 	    (na->nd_na_flags_reserved & ND_NA_FLAG_SOLICITED &&
 	     IN6_IS_ADDR_MULTICAST(daddr)))
@@ -1626,7 +1627,8 @@ static void md_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 
 	/* validity checks */
 	if (hoplimit < 255 || !IN6_IS_ADDR_LINKLOCAL(saddr) ||
-	    ih->icmp6_code != 0 || len < sizeof(struct nd_router_advert) ||
+	    ih->icmp6_code != 0 || len < 0 ||
+	    (size_t)len < sizeof(struct nd_router_advert) ||
 	    !conf.pmgr.accept_ra(iif, saddr, daddr, ra))
 		return;
 
@@ -1649,7 +1651,7 @@ static struct icmp6_handler md_ra_handler = {
 
 struct rtnl_handle md_rth;
 
-static void *md_nl_listen(void *arg)
+static void *md_nl_listen(__attribute__ ((unused)) void *arg)
 {
 	pthread_dbg("thread started");
 	rtnl_listen(&md_rth, process_nlmsg, NULL);

@@ -252,9 +252,12 @@ out:
 
 }
 
-static void mpd_recv_mps(const struct icmp6_hdr *ih, ssize_t len,
+static void mpd_recv_mps(const struct icmp6_hdr *ih,
+			 __attribute__ ((unused)) ssize_t len,
 			 const struct in6_addr *src, 
-			 const struct in6_addr *dst, int iif, int hoplimit)
+			 const struct in6_addr *dst,
+			 __attribute__ ((unused)) int iif,
+			 __attribute__ ((unused)) int hoplimit)
 {
 	struct mpa_entry *e;
 
@@ -307,12 +310,12 @@ int mpd_prefix_check(struct in6_addr *dst,
 				/* decrease DAD timeout */
 				valid -= DAD_TIMEOUT;
 			}
-			if (preferred <= lft->tv_sec)
+			if (preferred <= (unsigned long)lft->tv_sec)
 				res = IP6_MH_BAS_PRFX_DISCOV;
 			else
 				res = IP6_MH_BAS_ACCEPTED;
 
-			if (valid < lft->tv_sec)
+			if (valid < (unsigned long)lft->tv_sec)
 				tssetsec(*lft,
 					 umin(valid, MAX_BINDING_LIFETIME));
 			*ifindex = i->ifindex;
@@ -384,7 +387,7 @@ static void mpd_schedule_unsol_mpa_send(struct mpa_entry *e,
 	    tsisset(e->lastsent)) {
 		struct timespec diff;
 		tssub(ple->timestamp, e->lastsent, diff);
-		if (diff.tv_sec < conf.MaxMobPfxAdvInterval)
+		if ((unsigned long)diff.tv_sec < conf.MaxMobPfxAdvInterval)
 			return;
 	}
 	mpd_rand_adv_delay(&tmp, ple->ple_prefd_time);

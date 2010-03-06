@@ -183,7 +183,7 @@ int task_interrupted(void)
  * @arg: NULL
  *
  **/
-static void *runner(void *arg)
+static void *runner(__attribute__ ((unused)) void *arg)
 {
 	pthread_dbg("thread started");
 	pthread_mutex_lock(&mutex);

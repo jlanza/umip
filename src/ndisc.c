@@ -209,8 +209,8 @@ static int nd_get_l2addr(int ifindex, uint8_t *addr)
  * if everything went ok. 0 is returned on success, -1 on error. */
 static int iov_linearize(uint8_t *dst, int dstlen, struct iovec *iov,
 			 size_t iovlen, int *written) {
-	int i = 0, l;
-	int rem = dstlen;
+	unsigned int i = 0, l;
+	unsigned int rem = dstlen;
 	uint8_t *data = dst;
 	struct iovec cur;
 
@@ -258,8 +258,9 @@ static int ndisc_send_unspec(int oif, const struct in6_addr *dest,
 	uint8_t *data = (uint8_t *)(&frame.icmp);
 	int fd, ret, remlen, datalen = 0, written = 0, v = 1;
 
-	if (hdr == NULL || hdrlen < sizeof(struct icmp6_hdr) ||
-	    hdrlen > (sizeof(frame) - sizeof(struct ip6_hdr)))
+	if (hdr == NULL || hdrlen < 0 ||
+	    (size_t)hdrlen < sizeof(struct icmp6_hdr) ||
+	    (size_t)hdrlen > (sizeof(frame) - sizeof(struct ip6_hdr)))
 		return -EINVAL;
 
 	if ((fd = socket(AF_INET6, SOCK_RAW, IPPROTO_RAW)) < 0)

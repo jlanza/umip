@@ -85,8 +85,7 @@ static void dhaad_expire_halist(struct tq_elem *tqe)
 
 void dhaad_insert_halist(struct ha_interface *i, uint16_t key,
 			 uint16_t life_sec, uint16_t flags,
-			 struct nd_opt_prefix_info *pinfo,
-			 const struct in6_addr *lladdr)
+			 struct nd_opt_prefix_info *pinfo)
 {
 	struct home_agent *ha = NULL, *tmp;
 	struct list_head *lp;
@@ -159,7 +158,9 @@ static int dhaad_get_halist(struct ha_interface *i, uint16_t flags,
 
 static void dhaad_recv_req(const struct icmp6_hdr *ih, ssize_t len,
 			   const struct in6_addr *src, 
-			   const struct in6_addr *dst, int iif, int hoplimit)
+			   const struct in6_addr *dst,
+			   __attribute__ ((unused)) int iif,
+			   __attribute__ ((unused)) int hoplimit)
 {
 	struct mip_dhaad_req *rqh = (struct mip_dhaad_req *)ih;
 	struct mip_dhaad_rep *rph;
@@ -169,7 +170,7 @@ static void dhaad_recv_req(const struct icmp6_hdr *ih, ssize_t len,
 	struct in6_addr *ha_addr = NULL;
 
 	/* validity check */
-	if (len < sizeof(struct mip_dhaad_req))
+	if (len < 0 || (size_t)len < sizeof(struct mip_dhaad_req))
 		return;
 
 	if ((i = ha_get_if_by_anycast(dst, &ha_addr)) == NULL) {

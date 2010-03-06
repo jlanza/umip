@@ -67,7 +67,8 @@ static uint32_t calc_hash2(int s, const struct in6_addr *our_addr,
 	
 }
 
-static uint32_t calc_hash1(int s, const struct in6_addr *dummy, 
+static uint32_t calc_hash1(int s,
+			   __attribute__ ((unused)) const struct in6_addr *dummy,
 			   const struct in6_addr *peer_addr)
 {
 	return 	(peer_addr->s6_addr32[0] ^
@@ -98,7 +99,8 @@ static int match2(struct hash_entry *h, const struct in6_addr *our_addr,
 
 }
 
-static int match1(struct hash_entry *h, const struct in6_addr *dummy,
+static int match1(struct hash_entry *h,
+		  __attribute__ ((unused)) const struct in6_addr *dummy,
 		  const struct in6_addr *peer_addr)
 {
 	assert(h);

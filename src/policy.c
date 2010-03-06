@@ -56,8 +56,9 @@ int def_bind_policy = IP6_MH_BAS_PROHIBIT;
  *
  * Return interface index of preferred interface.
  **/
-int default_best_iface(const struct in6_addr *hoa,
-		       const struct in6_addr *ha, int pref_iface)
+int default_best_iface(__attribute__ ((unused)) const struct in6_addr *hoa,
+		       __attribute__ ((unused)) const struct in6_addr *ha,
+		       __attribute__ ((unused)) int pref_iface)
 {
 	return 0;
 }
@@ -72,10 +73,11 @@ int default_best_iface(const struct in6_addr *hoa,
  *
  * Return iif if a CoA is available and store the address in @coa 
  **/
-int default_best_coa(const struct in6_addr *hoa,
-		     const struct in6_addr *ha, int iif,
-		     const struct in6_addr *pref_coa,
-		     struct in6_addr *coa)
+int default_best_coa(__attribute__ ((unused)) const struct in6_addr *hoa,
+		     __attribute__ ((unused)) const struct in6_addr *ha,
+		     __attribute__ ((unused)) int iif,
+		     __attribute__ ((unused)) const struct in6_addr *pref_coa,
+		     __attribute__ ((unused)) struct in6_addr *coa)
 {
 	return 0;
 }
@@ -92,12 +94,12 @@ int default_best_coa(const struct in6_addr *hoa,
  * Stores configurable maximum lifetime for a binding in @lifetime.
  * Returns 1 if successful, otherwise 0.
  **/
-int default_max_binding_life(const struct in6_addr *remote_hoa,
-			     const struct in6_addr *remote_coa,
-			     const struct in6_addr *local_addr,
+int default_max_binding_life(__attribute__ ((unused)) const struct in6_addr *remote_hoa,
+			     __attribute__ ((unused)) const struct in6_addr *remote_coa,
+			     __attribute__ ((unused)) const struct in6_addr *local_addr,
 			     const struct ip6_mh_binding_update *bu, 
-			     ssize_t len,
-			     const struct timespec *suggested,
+			     __attribute__ ((unused)) ssize_t len,
+			     __attribute__ ((unused)) const struct timespec *suggested,
 			     struct timespec *lifetime)
 {
 	if (bu->ip6mhbu_flags & IP6_MH_BU_HOME) {
@@ -136,8 +138,8 @@ policy_check_mob_net_prefix(const struct policy_bind_acl_entry *acl,
  * %IP6_MH_BAS_PROHIBIT.
  **/
 int default_discard_binding(const struct in6_addr *remote_hoa,
-			    const struct in6_addr *remote_coa,
-			    const struct in6_addr *local_addr,
+			    __attribute__ ((unused)) const struct in6_addr *remote_coa,
+			    __attribute__ ((unused)) const struct in6_addr *local_addr,
 			    const struct ip6_mh_binding_update *bu,
 			    ssize_t len)
 {
@@ -175,11 +177,11 @@ int default_discard_binding(const struct in6_addr *remote_hoa,
  * Ack.  Returns 0 if BRA should not be used.  Stores proposed refresh
  * advice in @refresh,
  **/
-int default_use_bradv(const struct in6_addr *remote_hoa,
-		      const struct in6_addr *remote_coa,
-		      const struct in6_addr *local_addr,
-		      const struct timespec *lft,
-		      struct timespec *refresh)
+int default_use_bradv(__attribute__ ((unused)) const struct in6_addr *remote_hoa,
+		      __attribute__ ((unused)) const struct in6_addr *remote_coa,
+		      __attribute__ ((unused)) const struct in6_addr *local_addr,
+		      __attribute__ ((unused)) const struct timespec *lft,
+		      __attribute__ ((unused)) struct timespec *refresh)
 {
 	return 0;
 }
@@ -192,8 +194,8 @@ int default_use_bradv(const struct in6_addr *remote_hoa,
  * Determine whether to use the Key Management Mobility Capability bit
  * for giver addresses.
  **/
-int default_use_keymgm(const struct in6_addr *remote_addr,
-		       const struct in6_addr *local_addr)
+int default_use_keymgm(__attribute__ ((unused)) const struct in6_addr *remote_addr,
+		       __attribute__ ((unused)) const struct in6_addr *local_addr)
 {
 	return conf.KeyMngMobCapability;
 }
@@ -232,9 +234,10 @@ int default_accept_inet6_iface(int iif)
  * Determine whether to accept RA or not
  **/
 
-int default_accept_ra(int iif, const struct in6_addr *saddr,
-		      const struct in6_addr *daddr,
-		      const struct nd_router_advert *ra)
+int default_accept_ra(__attribute__ ((unused)) int iif,
+		      __attribute__ ((unused)) const struct in6_addr *saddr,
+		      __attribute__ ((unused)) const struct in6_addr *daddr,
+		      __attribute__ ((unused)) const struct nd_router_advert *ra)
 {
 	return 1;
 }
@@ -247,9 +250,9 @@ int default_accept_ra(int iif, const struct in6_addr *saddr,
  *
  * Returns ifindex of the CoA, or <= 0 if no CoA is available,
  **/
-int default_best_ro_coa(const struct in6_addr *hoa,
-			const struct in6_addr *cn,
-			struct in6_addr *coa)
+int default_best_ro_coa(__attribute__ ((unused)) const struct in6_addr *hoa,
+			__attribute__ ((unused)) const struct in6_addr *cn,
+			__attribute__ ((unused)) struct in6_addr *coa)
 {
 	return 0;
 }
@@ -290,7 +293,8 @@ int default_get_mnps(const struct in6_addr *hoa,
 	return i;
 }
 
-static int policy_bind_acle_cleanup(void *data, void *arg)
+static int policy_bind_acle_cleanup(void *data,
+				    __attribute__ ((unused)) void *arg)
 {
 	struct policy_bind_acl_entry *acl = data;
 	free(acl);

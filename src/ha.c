@@ -83,7 +83,8 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 
 	/* validity checks */
 	if (hoplimit < 255 || !IN6_IS_ADDR_LINKLOCAL(src) ||
-	    ih->icmp6_code != 0 || len < sizeof(struct nd_router_advert) ||
+	    ih->icmp6_code != 0 || len < 0 ||
+	    (size_t)len < sizeof(struct nd_router_advert) ||
 	    !conf.pmgr.accept_ra(iif, src, dst, ra))
 		return;
 
@@ -98,9 +99,9 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 		life = ntohs(ra->nd_ra_router_lifetime);
 	}
 	while (optlen > 1 && num_pinfo < MAX_HOME_AGENTS) {
-		int olen = opt[1] << 3;
+		unsigned int olen = opt[1] << 3;
 
-		if (olen > optlen || olen == 0)
+		if (olen > (size_t)optlen || olen == 0)
 			return;
 
 		if (opt[0] == ND_OPT_PREFIX_INFORMATION) {
@@ -136,7 +137,7 @@ static void ha_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 		if (pinfo[i]->nd_opt_pi_flags_reserved & 
 		    ND_OPT_PI_FLAG_RADDR) {
 			dhaad_insert_halist(iface, pref, life,
-					    flags, pinfo[i], src);
+					    flags, pinfo[i]);
 		}
 	}
 	mpd_del_expired_pinfos(iface);
@@ -205,7 +206,7 @@ struct ha_interface *ha_get_if_by_anycast(const struct in6_addr *anycast,
 	return NULL;
 }
 
-static int ha_if_addr_setup(const struct sockaddr_nl *who,
+static int ha_if_addr_setup(__attribute__ ((unused)) const struct sockaddr_nl *who,
 			    struct nlmsghdr *n,
 			    void *arg)
 {
@@ -219,7 +220,7 @@ static int ha_if_addr_setup(const struct sockaddr_nl *who,
 
 	if (n->nlmsg_type != RTM_NEWADDR)
 		return 0;
-	if (ifa->ifa_index != i->ifindex)
+	if (i->ifindex < 0 || ifa->ifa_index != (uint32_t)i->ifindex)
 		return 0;
 	if (ifa->ifa_scope != RT_SCOPE_UNIVERSE)
 		return 0;

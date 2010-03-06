@@ -146,7 +146,7 @@ static void _expire(struct tq_elem *tqe)
  * %BCE_CACHED.  Returns allocated space for an entry or NULL if none
  * available.
  **/
-struct bcentry *bcache_alloc(int type)
+struct bcentry *bcache_alloc(__attribute__ ((unused)) int type)
 {
 	struct bcentry *tmp;
 	/* This function should really return space from a
@@ -407,7 +407,7 @@ static void bce_delete(struct bcentry *bce, int flush)
 /**
  * bce_cleanup - cleans up a bcentry
  **/
-static int bce_cleanup(void *data, void *arg)
+static int bce_cleanup(void *data, __attribute__ ((unused)) void *arg)
 {
 	bce_delete(data, 1);
 	return 0;
