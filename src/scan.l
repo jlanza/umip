@@ -35,7 +35,7 @@
 #include <arpa/inet.h>
 #include "gram.h"
 
-#define YY_NO_UNPUT 1
+#define YY_NO_INPUT 1
 
 int lineno = 1;
 
