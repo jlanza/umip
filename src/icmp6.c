@@ -175,11 +175,13 @@ static void *icmp6_listen(__attribute__ ((unused)) void *arg)
 		len = icmp6_recv(icmp6_sock.fd, msg, sizeof(msg),
 				 &addr, &pkt_info, &hoplimit);
 		/* check if socket has closed */
-		if (len < 0)
+		if (len == -EBADF)
 			break;
+
 		/* common validity check */
-		if ((size_t)len < sizeof(struct icmp6_hdr))
+		if (len < 0 || (size_t)len < sizeof(struct icmp6_hdr))
 			continue;
+
 		saddr = &addr.sin6_addr;
 		daddr = &pkt_info.ipi6_addr;
 		iif = pkt_info.ipi6_ifindex;

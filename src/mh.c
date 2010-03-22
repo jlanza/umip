@@ -142,11 +142,13 @@ static void *mh_listen(__attribute__ ((unused)) void *arg)
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 		len = mh_recv(msg, sizeof(msg), &addr, &pktinfo, &haoa, &rta);
 		/* check if socket has closed */
-		if (len < 0)
+		if (len == -EBADF)
 			break;
+
 		/* common validity check */
-		if ((size_t)len < sizeof(struct ip6_mh))
+		if (len < 0 || (size_t)len < sizeof(struct ip6_mh))
 			continue;
+
 		addrs.src = &addr.sin6_addr;
 		addrs.dst = &pktinfo.ipi6_addr;
 		if (!IN6_IS_ADDR_UNSPECIFIED(&haoa)) {
