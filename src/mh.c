@@ -946,7 +946,6 @@ void mh_send_be(struct in6_addr *dst, struct in6_addr *hoa,
 	out.dst = dst;
 	if (hoa)
 		be->ip6mhbe_homeaddr = *hoa;
-	out.dst = dst;
 
 	mh_send(&out, &iov, 1, NULL, iif);
 	free_iov_data(&iov, 1);
