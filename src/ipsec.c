@@ -109,6 +109,7 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 	sp->sel.ifindex = 0;
 
 	switch (e->type) {
+		/* Tunnel */
 	case IPSEC_POLICY_TYPE_TUNNELHOMETESTING:
 		if (dir == XFRM_POLICY_IN || dir == XFRM_POLICY_FWD) {
 			if (nodetype == MIP6_ENTITY_MN) {
@@ -140,6 +141,95 @@ static void _set_sp(struct xfrm_userpolicy_info *sp,
 		break;
 	case IPSEC_POLICY_TYPE_TUNNELPAYLOAD:
 		sp->priority = MIP6_PRIO_RO_SIG_RR;
+		break;
+
+		/* Transport */
+	case IPSEC_POLICY_TYPE_HOMEREGBINDING:
+		if (dir == XFRM_POLICY_IN) {
+			if (nodetype == MIP6_ENTITY_MN) {
+				sp->sel.sport = htons(IP6_MH_TYPE_BACK);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
+				sp->sel.sport = htons(IP6_MH_TYPE_BU);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
+				sp->sel.sport = 0;
+		} else if (dir == XFRM_POLICY_OUT) {
+			if (nodetype == MIP6_ENTITY_MN) {
+				sp->sel.sport = htons(IP6_MH_TYPE_BU);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
+				sp->sel.sport = htons(IP6_MH_TYPE_BACK);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
+				sp->sel.sport = 0;
+		} else {
+			sp->sel.sport = 0;
+		}
+	case IPSEC_POLICY_TYPE_MH:
+		sp->sel.proto = IPPROTO_MH;
+		sp->priority = MIP6_PRIO_HOME_SIG;
+		break;
+	case IPSEC_POLICY_TYPE_BERROR:
+		sp->sel.proto = IPPROTO_MH;
+		sp->priority = MIP6_PRIO_HOME_SIG;
+		break;
+	case IPSEC_POLICY_TYPE_MOBPFXDISC:
+		if (dir == XFRM_POLICY_IN) {
+			if (nodetype == MIP6_ENTITY_MN) {
+				sp->sel.sport = htons(MIP_PREFIX_ADVERT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
+				sp->sel.sport = htons(MIP_PREFIX_SOLICIT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
+				sp->sel.sport = 0;
+		} else if (dir == XFRM_POLICY_OUT) {
+			if (nodetype == MIP6_ENTITY_MN) {
+				sp->sel.sport = htons(MIP_PREFIX_SOLICIT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
+				sp->sel.sport = htons(MIP_PREFIX_ADVERT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
+				sp->sel.sport = 0;
+		} else {
+			sp->sel.sport = 0;
+		}
+		sp->sel.proto = IPPROTO_ICMPV6;
+		sp->priority = MIP6_PRIO_HOME_DATA_IPSEC;
+		break;
+	case IPSEC_POLICY_TYPE_NDISC: /* XXX Makes sense ? --arno */
+		if (dir == XFRM_POLICY_IN) {
+			if (nodetype == MIP6_ENTITY_MN) {
+				sp->sel.sport = htons(ND_NEIGHBOR_SOLICIT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
+				sp->sel.sport = htons(ND_NEIGHBOR_ADVERT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
+				sp->sel.sport = 0;
+		} else if (dir == XFRM_POLICY_OUT) {
+			if (nodetype == MIP6_ENTITY_MN) {
+				sp->sel.sport = htons(ND_NEIGHBOR_ADVERT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else if (nodetype == MIP6_ENTITY_HA) {
+				sp->sel.sport = htons(MIP_PREFIX_SOLICIT);
+				sp->sel.sport_mask = ~((__u16)0);
+			} else
+				sp->sel.sport = 0;
+		} else {
+			sp->sel.sport = 0;
+		}
+		sp->sel.proto = IPPROTO_ICMPV6;
+		sp->priority = MIP6_PRIO_HOME_SIG;
+		break;
+	case IPSEC_POLICY_TYPE_ICMP:
+		sp->sel.proto = IPPROTO_ICMPV6;
+		sp->priority = MIP6_PRIO_HOME_DATA_IPSEC;
+		break;
+	case IPSEC_POLICY_TYPE_ANY:
+		sp->priority = MIP6_PRIO_HOME_DATA_IPSEC;
 		break;
 	default:
 		/* not tunnel IPsec type */
@@ -174,6 +264,7 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
 		char				buf[256];
 	} req;
 	struct xfrm_user_migrate um;
+	struct xfrm_user_kmaddress kma;
 	int err = 0;
 
 	memset(&req, 0, sizeof(req));
@@ -203,6 +294,21 @@ static int xfrm_sendmigrate(struct xfrm_userpolicy_info *sp,
 
 	addattr_l(&req.n, sizeof(req), XFRMA_MIGRATE,
 		  (void *)&um, sizeof(struct xfrm_user_migrate));
+
+	/* kmaddress */
+	kma.family = AF_INET6;
+	kma.reserved = 0;
+	if (sp->dir == XFRM_POLICY_OUT) {
+		memcpy(&kma.local,  nsrc, sizeof(kma.local));
+		memcpy(&kma.remote, ndst, sizeof(kma.remote));
+	} else {
+		memcpy(&kma.local,  ndst, sizeof(kma.local));
+		memcpy(&kma.remote, nsrc, sizeof(kma.remote));
+	}
+
+
+	addattr_l(&req.n, sizeof(req), XFRMA_KMADDRESS,
+		  (void *)&kma, sizeof(struct xfrm_user_kmaddress));
 
 #if 0
 	dbg("sel.family = %d\n", xpid.sel.family);
@@ -664,6 +770,110 @@ int ha_ipsec_mnp_pol_del(const struct in6_addr *our_addr,
 				  _ha_mnp_pol_del, &b);
 }
 
+
+struct ha_ipsec_trns_update {
+	int tunnel;
+	struct in6_addr coa;
+	struct in6_addr old_coa;
+};
+
+/*
+ *   Transport Update (for HA)
+ *
+ *   NOTE:
+ *   - This is a hook routine to ipsec_policy_apply()
+ */
+static int _ha_trns_update(const struct in6_addr *haaddr,
+			   const struct in6_addr *hoa,
+			   struct ipsec_policy_entry *e,
+			   void *arg)
+{
+	int err = 0;
+	struct ha_ipsec_trns_update *info = (struct ha_ipsec_trns_update *)arg;
+	int ifindex;
+	const struct in6_addr *oldcoa, *newcoa;
+	const struct in6_addr *peer_addr = hoa;
+	u_int8_t ipsec_proto;
+	struct xfrm_user_tmpl tmpl;
+	struct xfrm_userpolicy_info sp;
+
+	assert(haaddr);
+	assert(hoa);
+	assert(e);
+	assert(arg);
+
+	switch (e->type) {
+	case IPSEC_POLICY_TYPE_HOMEREGBINDING:
+	case IPSEC_POLICY_TYPE_BERROR:
+	case IPSEC_POLICY_TYPE_MH:
+	case IPSEC_POLICY_TYPE_MOBPFXDISC:
+	case IPSEC_POLICY_TYPE_NDISC:
+	case IPSEC_POLICY_TYPE_ICMP:
+	case IPSEC_POLICY_TYPE_ANY:
+		break;
+	default:
+		goto end;
+	}
+
+	/* XXX Limitation: Single IPsec proto can only be applied */
+	if (ipsec_use_esp(e))
+		ipsec_proto = IPPROTO_ESP;
+	else if (ipsec_use_ah(e))
+		ipsec_proto = IPPROTO_AH;
+	else if (ipsec_use_ipcomp(e))
+		ipsec_proto = IPPROTO_COMP;
+	else {
+		dbg("invalid ipsec proto\n");
+		goto end;
+	}
+
+	ifindex = info->tunnel;
+	oldcoa = IN6_ARE_ADDR_EQUAL(&info->old_coa, &in6addr_any) ?
+		peer_addr : &info->old_coa;
+	newcoa = &info->coa;
+
+	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, oldcoa, newcoa);
+
+	/* inbound */
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TRANSPORT,
+		  haaddr, oldcoa, e->reqid_toha);
+	_set_sp(&sp, e, XFRM_POLICY_IN, haaddr, 128,
+		hoa, 128, ifindex, MIP6_ENTITY_HA);
+	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
+		dbg("migrate for INBOUND policy failed\n");
+        	goto end;
+	}
+
+	/* outbound */
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TRANSPORT,
+		  oldcoa, haaddr, e->reqid_tomn);
+	_set_sp(&sp, e, XFRM_POLICY_OUT, hoa, 128,
+		haaddr, 128, ifindex, MIP6_ENTITY_HA);
+	if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
+		dbg("migrate for OUTBOUND policy failed\n");
+        	goto end;
+	}
+
+ end:
+	return err;
+}
+
+int ha_ipsec_trns_update(const struct in6_addr *haaddr,
+			 const struct in6_addr *hoa,
+			 const struct in6_addr *coa,
+			 const struct in6_addr *old_coa,
+			 int tunnel)
+{
+	struct ha_ipsec_trns_update b;
+	b.tunnel = tunnel;
+	b.coa = *coa;
+	b.old_coa = *old_coa;
+	return ipsec_policy_apply(haaddr, hoa, _ha_trns_update, &b);
+}
+
+
+
+
 /*
  *   Add/Delete IPsec Security Policy 
  */
@@ -953,6 +1163,96 @@ static int _mn_tnl_update(const struct in6_addr *haaddr,
 
  end:
 	return err;
+}
+
+/*
+ *   Transport mode Update (for MN)
+ *
+ *   NOTE:
+ *   - This is a hook routine to ipsec_policy_apply()
+ *   - It might be beneficial to merge it with tunnel version --arno
+ */
+static int _mn_trns_update(const struct in6_addr *haaddr,
+			   const struct in6_addr *hoa,
+			   struct ipsec_policy_entry *e,
+			   void *arg)
+{
+	int err = 0;
+	struct bulentry *bule;
+	int ifindex;
+	struct in6_addr *oldcoa, *newcoa;
+	u_int8_t ipsec_proto;
+	struct xfrm_user_tmpl tmpl;
+	struct xfrm_userpolicy_info sp;
+
+	assert(haaddr);
+	assert(hoa);
+	assert(e);
+	assert(arg);
+
+	switch (e->type) {
+	case IPSEC_POLICY_TYPE_HOMEREGBINDING:
+	case IPSEC_POLICY_TYPE_BERROR:
+	case IPSEC_POLICY_TYPE_MH:
+	case IPSEC_POLICY_TYPE_MOBPFXDISC:
+	case IPSEC_POLICY_TYPE_NDISC:
+	case IPSEC_POLICY_TYPE_ICMP:
+	case IPSEC_POLICY_TYPE_ANY:
+		break;
+	default:
+		goto end;
+	}
+
+	/* XXX Limitation: Single IPsec proto can only be applied */
+	if (ipsec_use_esp(e))
+		ipsec_proto = IPPROTO_ESP;
+	else if (ipsec_use_ah(e))
+		ipsec_proto = IPPROTO_AH;
+	else if (ipsec_use_ipcomp(e))
+		ipsec_proto = IPPROTO_COMP;
+	else {
+		dbg("invalid ipsec proto\n");
+		goto end;
+	}
+
+	bule = (struct bulentry *)arg;
+	ifindex = bule->home->if_tunnel;
+	oldcoa = &bule->last_coa;
+	newcoa = &bule->coa;
+
+	dump_migrate(ifindex, ipsec_proto, hoa, haaddr, oldcoa, newcoa);
+
+	/* outbound */
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TRANSPORT,
+		  haaddr, oldcoa, e->reqid_toha);
+	_set_sp(&sp, e, XFRM_POLICY_OUT, haaddr, 128,
+		hoa, 128, ifindex, MIP6_ENTITY_MN);
+	if ((err = xfrm_sendmigrate(&sp, &tmpl, haaddr, newcoa)) < 0) {
+		dbg("migrate for OUTBOUND policy failed\n");
+		goto end;
+	}
+
+	/* inbound */
+	_set_tmpl(&tmpl, 0, ipsec_proto, XFRM_MODE_TRANSPORT,
+		  oldcoa, haaddr, e->reqid_tomn);
+	_set_sp(&sp, e, XFRM_POLICY_IN, hoa, 128,
+		haaddr, 128, ifindex, MIP6_ENTITY_MN);
+	if ((err = xfrm_sendmigrate(&sp, &tmpl, newcoa, haaddr)) < 0) {
+		dbg("migrate for INBOUND policy (1) failed\n");
+		goto end;
+	}
+
+	/* XXX We should probably add something for MN-MN and MN-CN transport
+	 * XXX mode entries. --arno */
+ end:
+	return err;
+}
+
+int mn_ipsec_trns_update(const struct in6_addr *haaddr,
+			 const struct in6_addr *hoa,
+			 void *arg)
+{
+	return ipsec_policy_apply(haaddr, hoa, _mn_trns_update, arg);
 }
 
 int mn_ipsec_tnl_update(const struct in6_addr *haaddr,

@@ -661,6 +661,14 @@ static int home_tnl_add(int old_if, int new_if, struct home_tnl_ops_parm *p)
 			p->ba_status = IP6_MH_BAS_INSUFFICIENT;
 			goto err;
 		}
+
+		/* Always update transport mode (for signaling) */
+		if (ha_ipsec_trns_update(our_addr, peer_addr, coa, old_coa,
+					 p->bce->tunnel) < 0) {
+			p->ba_status = IP6_MH_BAS_INSUFFICIENT;
+			goto err;
+		}
+
 		/* migrate */ 
 		if (ha_ipsec_tnl_update(our_addr, peer_addr, coa, old_coa,
 					p->bce->tunnel, mnp) < 0) {
@@ -722,10 +730,16 @@ static int home_tnl_chg(int old_if, int new_if, struct home_tnl_ops_parm *p)
 
 		/* migrate */ 
 		if (conf.UseMnHaIPsec &&
-		    !IN6_ARE_ADDR_EQUAL(old_coa, coa) &&
-		    ha_ipsec_tnl_update(our_addr, peer_addr, coa, old_coa,
-					p->bce->tunnel, mnp) < 0) {
-			return -1;
+		    !IN6_ARE_ADDR_EQUAL(old_coa, coa)) {
+			if (ha_ipsec_trns_update(our_addr, peer_addr,
+						coa, old_coa,
+						p->bce->tunnel) < 0)
+				return -1;
+
+			if (ha_ipsec_tnl_update(our_addr, peer_addr,
+						coa, old_coa,
+						p->bce->tunnel, mnp) < 0)
+				return -1;
 		}
 	} else { 
 		home_tnl_del(old_if, new_if, p);

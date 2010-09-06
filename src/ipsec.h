@@ -97,6 +97,12 @@ int ha_ipsec_mnp_pol_add(const struct in6_addr *our_addr,
 			 struct list_head *new_mnps,
 			 int tunnel);
 
+int ha_ipsec_trns_update(const struct in6_addr *haaddr,
+			 const struct in6_addr *hoa,
+			 const struct in6_addr *coa,
+			 const struct in6_addr *old_coa,
+			 int tunnel);
+
 int ha_ipsec_tnl_pol_add(const struct in6_addr *our_addr, 
 			 const struct in6_addr *peer_addr,
 			 int tunnel,
@@ -110,6 +116,10 @@ int ha_ipsec_tnl_pol_del(const struct in6_addr *our_addr,
 int mn_ipsec_tnl_update(const struct in6_addr *haaddr,
 			const struct in6_addr *hoa,
 			void *arg);
+
+int mn_ipsec_trns_update(const struct in6_addr *haaddr,
+			 const struct in6_addr *hoa,
+			 void *arg);
 
 int mn_ipsec_tnl_pol_add(const struct in6_addr *haaddr,
 			 const struct in6_addr *hoa,

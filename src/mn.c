@@ -871,26 +871,30 @@ static void mn_send_home_bu(struct home_addr_info *hai)
 			homereg_expired = 1;
 		}
 	}
-	if (!homereg_expired) {
-		bule->do_send_bu = 1;
-		mn_send_bu_msg(bule);
-		bul_update_timer(bule);		
-		if (conf.OptimisticHandoff)
-			post_ba_bul_update(bule);	
-	}
 	if (conf.UseMnHaIPsec) {
         	/* create SP entry for protecting RR signals */
 		if (type_movement == MIP6_TYPE_MOVEMENT_HL2FL) {
 			mn_ipsec_tnl_pol_add(&bule->home->ha_addr,
 					     &bule->hoa, bule);
 	        }
-		/* migrate tunnel endpoint */
-		if (bule->coa_changed &&
-		    type_movement != MIP6_TYPE_MOVEMENT_FL2HL) {
-			mn_ipsec_tnl_update(&bule->home->ha_addr,
-					    &bule->hoa, bule);
+		/* migrate tunnel endpoint and update transport mode SA */
+		if (bule->coa_changed) {
+			/* Always update transport mode (for signaling) */
+			mn_ipsec_trns_update(&bule->home->ha_addr,
+					     &bule->hoa, bule);
+			/* No need to update tunnel when back home */
+			if (type_movement != MIP6_TYPE_MOVEMENT_FL2HL)
+				mn_ipsec_tnl_update(&bule->home->ha_addr,
+						    &bule->hoa, bule);
 		}
         }
+	if (!homereg_expired) {
+		bule->do_send_bu = 1;
+		mn_send_bu_msg(bule);
+		bul_update_timer(bule);
+		if (conf.OptimisticHandoff)
+			post_ba_bul_update(bule);
+	}
 	/* Before bul_iterate, tunnel modification should be done. */
 	tunnel_mod(hai->if_tunnel, &hai->primary_coa.addr, &hai->ha_addr,
 		   hai->primary_coa.iif, mn_ext_tunnel_ops, hai);
