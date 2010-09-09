@@ -16,6 +16,19 @@ enclosed in '{' and '}'.  Strings are quoted with double quotes.
 
 The file contains the following common definitions:
 .TP
+.BR "include " """<pattern>"""
+
+Includes content from other files based on provided pattern. Usual shell
+wildcards are supported ('?', '*', '['). See man (7) glob for details. The
+number of included files is virtually unlimited but only five levels of
+recursion are authorized to prevent loops. Note that if given pattern
+does not match any file, a simple warning is issued but parsing continues.
+Unlike most configuration statements, no ';' is expected after the pattern.
+
+Example: include "/etc/mip6d.conf.d/*.conf"
+
+
+.TP
 .BR "NodeConfig " "CN | HA | MN" ";"
 
 Indicates if the daemon should run in Correspondent Node, Home Agent or

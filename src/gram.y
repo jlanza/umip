@@ -85,20 +85,24 @@ struct ipsec_policy_set ipsec_ps = {
 
 extern int lineno;
 extern char *yytext;
+extern char *incl_file; /* If not NULL, name of included file being parsed.
+			 * If NULL, we are in main configuration file */
 
 static void yyerror(char *s) {
-	fprintf(stderr, "Error in configuration file %s\n", conf.config_file);
-	fprintf(stderr, "line %d: %s at '%s'\n", lineno, s, yytext);
+	fprintf(stderr, "Error in configuration file %s ",
+		incl_file ? incl_file : conf.config_file);
+	fprintf(stderr, "at line %d: %s at '%s'\n", lineno, s, yytext);
 }
 
 static void uerror(const char *fmt, ...) {
 	char s[1024];
 	va_list args;
 
-	fprintf(stderr, "Error in configuration file %s\n", conf.config_file);
+	fprintf(stderr, "Error in configuration file %s ",
+		incl_file ? incl_file : conf.config_file);
 	va_start(args, fmt);
 	vsprintf(s, fmt, args);
-	fprintf(stderr, "line %d: %s\n", lineno, s);
+	fprintf(stderr, "at line %d: %s\n", lineno, s);
 	va_end(args);
 }
 
