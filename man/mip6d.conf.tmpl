@@ -70,6 +70,7 @@ These options are used both in the Home Agent and Mobile Node:
 .BR "Interface " "name" " {"
 .BR "	MnIfPreference " "number" ";"
 .BR "	IfType " "CN | HA | MN" ";"
+.BR "	Tunnel " "boolean" ";"
 .B }
 .fi
 
@@ -111,6 +112,55 @@ this interface, the interface type should be set to CN.
 Default: same as
 .B NodeConfig
 
+.B Tunnel
+
+When enabled, this flag explicitly marks the interface as a tunnel
+interface and modify the behavior of UMIP regarding the router
+discovery, address configuration and route addition steps for the
+interface. Those are expected to be done externally (manually or by
+another automatic process (for instance when using a Teredo interface).
+Note that the handling of routing via the interface is still partly
+handled by UMIP but leaves some latitude to the user or the automatic
+process that setup the interface. UMIP looks for default routes in the
+main table that use the interface as output device and replaces them by
+a default route with a proper preference. If a gateway was present for
+the route (there is one for 6to4, but none when miredo is used), it is
+kept in the new route. Other routes that are defined for the device
+(including other default routes in other tables) are left untouched.
+
+Limitations and details:
+
+1) Tunnel interfaces are only allowed for MN and CN (not HA).
+
+2) They are never considered as home link (i.e. you will never be at
+home on a tunnel).
+
+3) Unlike for physical interfaces, link detection is not reliable for
+tunnel interfaces. If the tunnel interface state is directly dependent
+of some physical interface link status, that status must be
+monitored externally (i.e. not by UMIP) and reflected by having either
+the interface being set down/up or address being removed/added for
+UMIP to detect the change in interface configuration.
+
+4) An address must be configured on the interface for it to be
+selected. If no adress is available, UMIP will simply not consider the
+interface at all (even if it provides a default route).
+
+5) Routes that include specific sources are not considered by UMIP.
+
+Example:
+
+When using a teredo interface, the default route through the teredo
+device is found and its preference changed. Link local routes are kept
+unchanged. Address configuration is kept unmodified.
+
+When using a 6to4 tunnel interface, a default route through the 6to4
+device exists. It uses the 6to4 relay address (::192.88.99.1 anycast
+address or another specific one) as gateway. UMIP finds this default
+route and install a new default one with the same gateway but an
+updated metric.
+
+Default: disabled
 
 .TP
 .BR "UseMnHaIPsec " "boolean" ";"

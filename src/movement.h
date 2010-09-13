@@ -47,6 +47,7 @@ struct md_coa {
 	uint8_t plen;
 	uint8_t scope;
 	int ifindex;
+	int if_is_tunnel;
 	struct in6_addr addr;
 	struct timespec timestamp;
 	struct timespec valid_time;
@@ -94,6 +95,7 @@ struct md_inet6_iface {
 	unsigned int link_flags;
 	int home_link;
 	int ll_dad_unsafe;
+	int is_tunnel;
 	unsigned short type;
 	short hwalen;
 	uint8_t hwa[16];

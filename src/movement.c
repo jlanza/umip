@@ -135,7 +135,10 @@ static inline void md_free_coa(struct md_coa *coa)
 
 static void md_flush_coa(struct md_coa *coa)
 {
-	if (!(coa->flags&IFA_F_HOMEADDRESS_NODAD)) {
+	/* For tunnels, addresses are not managed by us so
+	   we don't remove them from the interface */
+	if (!(coa->flags&IFA_F_HOMEADDRESS_NODAD) &&
+	    !(coa->if_is_tunnel)) {
 		MDBG2("deleting CoA "
 		      "%x:%x:%x:%x:%x:%x:%x:%x on iface %d\n", 
 		      NIP6ADDR(&coa->addr), coa->ifindex);
@@ -219,8 +222,11 @@ static void md_flush_router_list(struct list_head *routers)
 static void md_free_inet6_iface(struct md_inet6_iface *iface)
 {
 	MDBG3("freeing iface %s (%d)\n", iface->name, iface->ifindex);
-	assert(list_empty(&iface->default_rtr));
-	md_flush_router_list(&iface->expired_rtrs);
+	if (!iface->is_tunnel) {
+		/* tunnel interfaces have no router information */
+		assert(list_empty(&iface->default_rtr));
+		md_flush_router_list(&iface->expired_rtrs);
+	}
 	assert(list_empty(&iface->coas));
 	md_flush_coa_list(&iface->expired_coas);
 	free(iface);
@@ -320,15 +326,21 @@ static void md_flush_inet6_iface(struct md_inet6_iface *iface)
 	struct md_router *rtr;
 	struct list_head *l, *n;
 	del_task(&iface->tqe);
-	iface->router_solicits = 0;
-	list_for_each_safe(l, n, &iface->backup_rtrs) {
-		rtr = list_entry(l, struct md_router, list);
-		md_expire_router(iface, rtr, NULL);
-	}		
-	if ((rtr = md_get_first_router(&iface->default_rtr)) != NULL) {
-		md_expire_router(iface, rtr, NULL);
+
+	/* We do not maintain router related
+	   information for tunnel interfaces */
+	if (!iface->is_tunnel) {
+		iface->router_solicits = 0;
+		list_for_each_safe(l, n, &iface->backup_rtrs) {
+			rtr = list_entry(l, struct md_router, list);
+			md_expire_router(iface, rtr, NULL);
+		}
+		if ((rtr = md_get_first_router(&iface->default_rtr)) != NULL) {
+			md_expire_router(iface, rtr, NULL);
+		}
+		md_flush_router_list(&iface->expired_rtrs);
 	}
-	md_flush_router_list(&iface->expired_rtrs);
+
 	list_for_each_safe(l, n, &iface->coas) {
 		struct md_coa *coa = list_entry(l, struct md_coa, list);
 		md_expire_coa(iface, coa);
@@ -354,7 +366,8 @@ static void md_link_down(struct md_inet6_iface *iface)
 }
 
 static void
-md_init_coa(struct md_coa *coa, struct ifaddrmsg *ifa, struct rtattr **rta_tb)
+md_init_coa(struct md_coa *coa, struct ifaddrmsg *ifa, struct rtattr **rta_tb,
+	    int if_is_tunnel)
 {
 	memset(coa, 0, sizeof(struct md_coa));
 	INIT_LIST_HEAD(&coa->list);
@@ -362,6 +375,10 @@ md_init_coa(struct md_coa *coa, struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 	coa->plen = ifa->ifa_prefixlen;
 	coa->scope = ifa->ifa_scope;
 	coa->ifindex = ifa->ifa_index;
+	/* For tunnel interfaces, mark the CoA
+	   to avoid removing the address from
+	   the interface when flushing it. */
+	coa->if_is_tunnel = if_is_tunnel;
 	coa->addr = *(struct in6_addr *) RTA_DATA(rta_tb[IFA_ADDRESS]);
 }
 
@@ -372,7 +389,7 @@ static struct md_coa *md_create_coa(struct md_inet6_iface *iface,
 	struct md_coa *coa = malloc(sizeof(struct md_coa));
 	if (coa != NULL) {
 		struct ifa_cacheinfo *ci;
-		md_init_coa(coa, ifa, rta_tb);
+		md_init_coa(coa, ifa, rta_tb, iface->is_tunnel);
 		ci = RTA_DATA(rta_tb[IFA_CACHEINFO]);
 		clock_gettime(CLOCK_REALTIME, &coa->timestamp);
 		tssetsec(coa->valid_time, ci->ifa_valid);
@@ -391,7 +408,6 @@ static int update_coa(struct md_inet6_iface *iface,
 	struct in6_addr *addr;
 	
 	addr = RTA_DATA(rta_tb[IFA_ADDRESS]);
-
 	if (!in6_is_addr_routable_unicast(addr))
 		return 0;
 
@@ -463,8 +479,19 @@ static int process_new_addr(struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 
 static void md_inet6_iface_init(struct md_inet6_iface *i, int ifindex)
 {
+	struct list_head *list;
+
 	memset(i, 0, sizeof(struct md_inet6_iface));
 	i->ifindex = ifindex;
+
+	/* Mark interface as tunnel if set in the conf */
+	list_for_each(list, &conf.net_ifaces) {
+		struct net_iface *nif;
+		nif = list_entry(list, struct net_iface, list);
+		if (nif->ifindex == ifindex)
+			i->is_tunnel = nif->is_tunnel;
+	}
+
 	INIT_LIST_HEAD(&i->list);
 	INIT_LIST_HEAD(&i->default_rtr);
 	INIT_LIST_HEAD(&i->backup_rtrs);
@@ -504,7 +531,7 @@ static int process_del_addr(struct ifaddrmsg *ifa, struct rtattr **rta_tb)
 		coa = NULL;
 	}
 	if (coa == NULL) {
-		md_init_coa(&coa_h, ifa, rta_tb);
+		md_init_coa(&coa_h, ifa, rta_tb, iface->is_tunnel);
 		coa = &coa_h;
 	}
 	__md_trigger_movement_event(ME_COA_EXPIRED, 0, iface, coa);
@@ -568,35 +595,223 @@ static void md_discover_router(struct tq_elem *tqe)
 static void md_check_expired_coas(struct md_inet6_iface *iface, 
 				  struct md_router *rtr);
 
+/* Called on netlink retrieved information for an address
+   in order to update list of coa on that iface (function
+   follows rtnl_filter_t prototype). */
+static int apply_update_tunnel_coa(__attribute__ ((unused)) const struct sockaddr_nl *who,
+				   struct nlmsghdr *n, void *arg)
+{
+	struct md_inet6_iface *iface = (struct md_inet6_iface *)arg;
+	int ifindex = iface->ifindex;
+	struct ifaddrmsg *ifa = NLMSG_DATA(n);
+	struct rtattr *rta_tb[RTA_MAX+1];
+
+	if (n->nlmsg_type == NLMSG_DONE ||
+	    n->nlmsg_type == NLMSG_ERROR)
+		return 0;
+
+	if (n->nlmsg_type != RTM_NEWADDR ||
+	    n->nlmsg_len < NLMSG_LENGTH(sizeof(*ifa)) ||
+	    ifa->ifa_family != AF_INET6)
+			return -EINVAL;
+
+	if (ifa->ifa_flags & IFA_F_TENTATIVE)
+		return 0;
+
+	memset(rta_tb, 0, sizeof(rta_tb));
+	parse_rtattr(rta_tb, IFA_MAX, IFA_RTA(ifa),
+		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*ifa)));
+
+	if (!rta_tb[IFA_ADDRESS])
+		return 0;
+
+	if (ifindex < 0 || ifa->ifa_index != (uint32_t)ifindex)
+		return 0;
+
+	update_coa(iface, ifa, rta_tb);
+	return 0;
+}
+
+/* Grab the list of addresses configured on a provided
+   tunnel interface and add usable ones to CoA list */
+static int __md_update_tunnel_iface_coa_list(struct md_inet6_iface *iface)
+{
+	struct ifaddrmsg ifa;
+	int len, res = 0;
+	struct rtnl_handle rth;
+
+	/* Open socket */
+	if (rtnl_open_byproto(&rth, 0, NETLINK_ROUTE) < 0)
+		return -1;
+
+	/* Fill ifaddrmsg (will serve as request) */
+	memset(&ifa, 0, sizeof(ifa));
+	ifa.ifa_family = AF_INET6;
+	ifa.ifa_prefixlen = 0;
+	ifa.ifa_flags = IFA_F_PERMANENT;
+	ifa.ifa_scope = RT_SCOPE_UNIVERSE;
+	ifa.ifa_index = iface->ifindex;
+	len = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
+
+	/* Dump address information for previous request and work on
+	 * every part of the result */
+	if (rtnl_dump_request(&rth, RTM_GETADDR, &ifa, len) < 0 ||
+	    rtnl_dump_filter(&rth, apply_update_tunnel_coa,
+			     (void *)iface, NULL, NULL) < 0)
+		res = -1;
+
+	rtnl_close(&rth);
+	return res;
+}
+
+static uint32_t md_router_compute_def_route_metric(uint16_t iface_pref,
+						   uint8_t  rtr_pref);
+
+/* called on all routes find by __md_update_tunnel_iface_routes */
+static int apply_update_tunnel_route(__attribute__ ((unused)) const struct sockaddr_nl *who,
+				     struct nlmsghdr *n, void *arg)
+{
+	struct md_inet6_iface *iface = (struct md_inet6_iface *)arg;
+	uint32_t old_metric=0, new_metric;
+	int ifindex = iface->ifindex;
+	struct rtmsg *r = NLMSG_DATA(n);
+	struct rtattr *rta_tb[RTA_MAX+1];
+	struct rtattr *rta;
+	int len = n->nlmsg_len;
+	struct in6_addr *gateway = NULL;
+
+	if (n->nlmsg_type == NLMSG_DONE ||
+	    n->nlmsg_type == NLMSG_ERROR)
+		return 0;
+
+	if (n->nlmsg_type != RTM_NEWROUTE||
+	    len < 0 || (size_t)len < NLMSG_LENGTH(sizeof(*r)) ||
+	    r->rtm_family != AF_INET6) {
+		return -EINVAL;
+	}
+
+	len -= NLMSG_LENGTH(sizeof(*r));
+	if (len < 0)
+		return -1;
+
+	parse_rtattr(rta_tb, RTA_MAX, RTM_RTA(r), len);
+
+	rta = rta_tb[RTA_OIF]; /* Main filter is ifindex */
+	if (rta == NULL || *(int*)RTA_DATA(rta) != ifindex) {
+		return 0;
+	}
+
+	/* Man page is explicit enough, we only deal with the default
+	   route in main table by removing it and installing a new one
+	   through the device with a modified metric. Gateway is kept
+	   if present (for 6to4 mainly). We just skip other routes. */
+	if (r->rtm_dst_len != 0 ||
+	    r->rtm_src_len != 0 ||
+	    r->rtm_table != RT_TABLE_MAIN ||
+	    r->rtm_scope != RT_SCOPE_UNIVERSE ||
+	    r->rtm_type != RTN_UNICAST ||
+	    rta_tb[RTA_DST] != NULL ||
+	    rta_tb[RTA_SRC] != NULL)
+		return 0;
+
+	if (rta_tb[RTA_GATEWAY]) {
+		gateway = RTA_DATA(rta_tb[RTA_GATEWAY]);
+	}
+
+	if (rta_tb[RTA_PRIORITY])
+		old_metric = *(uint32_t*)RTA_DATA(rta_tb[RTA_PRIORITY]);
+
+	/* Compute new metric */
+	new_metric = md_router_compute_def_route_metric(iface->preference, 0);
+
+	/* No change needed */
+	if (old_metric == new_metric)
+		return 0;
+
+	/* Different metrics, start by adding the new route and then remove
+	 * the old one. Having done some tests, I cannot manage to do that
+	 * reliably in a single operation (i.e. change the metric). --arno */
+	route_add(ifindex, RT_TABLE_MAIN, RTPROT_STATIC, r->rtm_flags,
+		  new_metric, &in6addr_any, 0, &in6addr_any, 0, gateway);
+	route_del(ifindex, RT_TABLE_MAIN, old_metric,
+		  &in6addr_any, 0, &in6addr_any, 0, gateway);
+
+	return 0;
+}
+
+/* Grab routes that use provided interface, keep link local ones,
+ * modify metric of default one(s ?) and remove others. */
+static int __md_update_tunnel_iface_routes(struct md_inet6_iface *iface)
+{
+	struct rtmsg r;
+	struct rtnl_handle rth;
+	int len, res = 0;
+
+	if (rtnl_open_byproto(&rth, 0, NETLINK_ROUTE) < 0)
+		return -1;
+
+	/* Fill rtmsg (will serve as request) */
+	memset(&r, 0, sizeof(r));
+	r.rtm_family = AF_INET6;
+	r.rtm_table = RT_TABLE_MAIN;
+	r.rtm_scope = RT_SCOPE_UNIVERSE;
+	r.rtm_protocol = RTPROT_UNSPEC;
+	r.rtm_type = RTN_UNICAST;
+	len = NLMSG_LENGTH(sizeof(r));
+
+	/* Dump route information for previous request and work on
+	 * every part of the result */
+	if (rtnl_dump_request(&rth, RTM_GETROUTE, &r, len) < 0 ||
+	    rtnl_dump_filter(&rth, apply_update_tunnel_route,
+			     (void *)iface, NULL, NULL) < 0)
+		res = -1;
+
+	rtnl_close(&rth);
+	return res;
+}
+
 static void md_link_up(struct md_inet6_iface *iface)
 {
 	MDBG2("link up on iface %s (%d)\n", iface->name, iface->ifindex);
-	__md_discover_router(iface);
+
+	if (iface->is_tunnel) {
+		/* When interface is a tunnel, we do not deal with router
+		 * discovery and interface configuration. We only:
+		 * - grab and update the list of CoAs for the interface.
+		 * - updates routes (i.e. change metric) */
+		__md_update_tunnel_iface_coa_list(iface);
+		__md_update_tunnel_iface_routes(iface);
+	} else
+		__md_discover_router(iface);
 }
 
 static void __md_new_link(struct md_inet6_iface *iface, int link_changed)
 {
-	assert(!list_empty(&iface->default_rtr));
-
-	del_task(&iface->tqe);
-	iface->router_solicits = 0;
-
 	MDBG2("new link on iface %s (%d)\n", iface->name, iface->ifindex);
 
-	if (link_changed) {
-		struct list_head *l, *n;
-		if (!iface->ll_dad_unsafe) {
-			iface->iface_flags |= MD_LINK_LOCAL_DAD;
-			addr_do(&iface->lladdr, 64, iface->ifindex, NULL,
-				mn_lladdr_dad);
+	del_task(&iface->tqe);
+
+	/* Skip router related updates for autoconfigured tunnel iface*/
+	if (!iface->is_tunnel) {
+		assert(!list_empty(&iface->default_rtr));
+		iface->router_solicits = 0;
+
+		if (link_changed) {
+			struct list_head *l, *n;
+			if (!iface->ll_dad_unsafe) {
+				iface->iface_flags |= MD_LINK_LOCAL_DAD;
+				addr_do(&iface->lladdr, 64, iface->ifindex,
+					NULL, mn_lladdr_dad);
+			}
+			list_for_each_safe(l, n, &iface->backup_rtrs) {
+				struct md_router *rtr;
+				rtr = list_entry(l, struct md_router, list);
+				md_expire_router(iface, rtr, NULL);
+			}
 		}
-		list_for_each_safe(l, n, &iface->backup_rtrs) {
-			struct md_router *rtr;
-			rtr = list_entry(l, struct md_router, list);
-			md_expire_router(iface, rtr, NULL);
-		}		
+		md_flush_router_list(&iface->expired_rtrs);
 	}
-	md_flush_router_list(&iface->expired_rtrs);
+
 	md_flush_coa_list(&iface->expired_coas);
 }
 
@@ -606,6 +821,7 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 {
 	struct md_inet6_iface *iface;
 	
+	/* Note: steps performed below are ok even for tunnel interfaces */
 	if ((iface = malloc(sizeof(struct md_inet6_iface))) != NULL) {
 		md_inet6_iface_init(iface, ifi->ifi_index);
 		if (rta_tb[IFLA_IFNAME])
@@ -722,7 +938,8 @@ static int process_new_inet6_iface(struct ifinfomsg *ifi,
 			      iface->name, iface->ifindex);
 			iface->preference = pref;
 			list_add_tail(&iface->list, &ifaces);
-			iface_proc_entries_init(iface);
+			if (!iface->is_tunnel)
+				iface_proc_entries_init(iface);
 			if (md_is_link_up(iface))
 				md_link_up(iface);
 		}
@@ -762,9 +979,7 @@ static int process_link(struct nlmsghdr *n)
 	if (ifi->ifi_family != AF_UNSPEC && ifi->ifi_family != AF_INET6)
 		return 0;
 
-	/* using IPv6-IPv6 tunnels for movement detection leads to disaster */
-	if (ifi->ifi_type == ARPHRD_LOOPBACK ||
-	    ifi->ifi_type == ARPHRD_TUNNEL6)
+	if (ifi->ifi_type == ARPHRD_LOOPBACK)
 		return 0;
 
 	memset(rta_tb, 0, sizeof(rta_tb));
@@ -892,14 +1107,18 @@ static void md_check_home_link(struct md_inet6_iface *i, struct md_router *rtr)
 	struct list_head *l;
 	int home_link = 0;
 	int ll_dad_unsafe = 0;
-	list_for_each(l, &conf.home_addrs) {
-		struct home_addr_info *hai;
-		hai = list_entry(l, struct home_addr_info, list);
-		if (mn_is_at_home(&rtr->prefixes,
-				  &hai->home_prefix,
-				  hai->home_plen)) {
-			home_link = 1;
-			ll_dad_unsafe |= hai->lladdr_comp;
+
+	/* Don't bother checking: MN can't be at home on a tunnel iface */
+	if (!i->is_tunnel) {
+		list_for_each(l, &conf.home_addrs) {
+			struct home_addr_info *hai;
+			hai = list_entry(l, struct home_addr_info, list);
+			if (mn_is_at_home(&rtr->prefixes,
+					  &hai->home_prefix,
+					  hai->home_plen)) {
+				home_link = 1;
+				ll_dad_unsafe |= hai->lladdr_comp;
+			}
 		}
 	}
 	if (i->home_link != home_link)
@@ -1735,6 +1954,7 @@ static void md_recv_ra(const struct icmp6_hdr *ih, ssize_t len,
 
 	pthread_mutex_lock(&iface_lock);
 	if ((iface = md_get_inet6_iface(&ifaces, iif)) != NULL &&
+	    (!iface->is_tunnel) &&
 	    (new = md_create_router(iface, saddr, ra, len)) != NULL) {
 		if (!md_check_expired_routers(iface, new) &&
 		    !md_check_backup_routers(iface, new))
@@ -1877,7 +2097,9 @@ void md_cleanup(void)
 		iface = list_entry(l, struct md_inet6_iface, list);
 		md_expire_inet6_iface(iface);
 		iface_proc_entries_cleanup(iface);
-		ndisc_send_rs(iface->ifindex, &in6addr_all_routers_mc, NULL, 0);
+		if (!iface->is_tunnel)
+			ndisc_send_rs(iface->ifindex, &in6addr_all_routers_mc,
+				      NULL, 0);
 		md_free_inet6_iface(iface);
 	}
 	pthread_mutex_unlock(&iface_lock);

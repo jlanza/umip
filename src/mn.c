@@ -2093,7 +2093,10 @@ static int mn_home_rtr_chk(struct home_addr_info *hai, struct md_router *rtr)
 
 static inline int mn_verify_iface(const struct md_inet6_iface *iface)
 {
- 	return !list_empty(&iface->coas) && !list_empty(&iface->default_rtr);
+	/* Tunnel interfaces do not have a default router
+	   (route is via the device itself) */
+ 	return (!list_empty(&iface->coas) &&
+		(iface->is_tunnel || !list_empty(&iface->default_rtr)));
 }
 
 static struct md_inet6_iface *mn_get_iface(const struct home_addr_info *hai,
@@ -2169,6 +2172,7 @@ static int mn_make_ho_verdict(const struct movement_event *me,
 	int force = 0;
 
 	if (me->iface != NULL && 
+	    (!me->iface->is_tunnel) &&
 	    (rtr = md_get_first_router(&me->iface->default_rtr)) != NULL &&
 	    mn_is_at_home(&rtr->prefixes, &hai->home_prefix, hai->home_plen)) {
 		*next_rtr = rtr;
@@ -2263,10 +2267,13 @@ static int mn_make_ho_verdict(const struct movement_event *me,
 	    IN6_ARE_ADDR_EQUAL(&coa->addr, &hai->primary_coa.addr))
 		return MN_HO_IGNORE;
 
-	if (list_empty(&new_iface->default_rtr))
-		return MN_HO_IGNORE;
+	if (!new_iface->is_tunnel) {
+ 		if (list_empty(&new_iface->default_rtr))
+			return MN_HO_IGNORE;
 
-	*next_rtr = md_get_first_router(&new_iface->default_rtr);
+		*next_rtr = md_get_first_router(&new_iface->default_rtr);
+	}
+
 	*next_coa = coa;
 	return MN_HO_PROCEED;
 }

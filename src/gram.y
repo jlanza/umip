@@ -51,6 +51,7 @@
 struct net_iface ni = {
 	.mip6_if_entity = MIP6_ENTITY_NO,
 	.mn_if_preference = POL_MN_IF_DEF_PREFERENCE,
+	.is_tunnel = 0,
 };
 	
 struct home_addr_info hai = {
@@ -179,6 +180,7 @@ static void uerror(const char *fmt, ...) {
 %token		IFNAME
 %token		IFTYPE
 %token		MNIFPREFERENCE
+%token		ISTUNNEL
 %token		MNUSEALLINTERFACES
 %token		MNROUTERPROBES
 %token		MNROUTERPROBETIMEOUT
@@ -361,10 +363,21 @@ ifacedef	: QSTRING ifacesub
 			struct net_iface *nni;
 			strncpy(ni.name, $1, IF_NAMESIZE - 1);
 			ni.ifindex = if_nametoindex($1);
+
+			if (is_if_ha(&ni) && ni.is_tunnel) {
+				/* We do not allow tunnel interfaces
+				   for HA, only for MN and CN */
+				uerror("Use of tunnel interface is not"
+				       " possible for HA yet");
+				free($1);
+					return -1;
+			}
 			if (ni.ifindex <= 0) {
 				if (is_if_ha(&ni)) {
-					/* We do not allow unavailable ifaces for HA ... */
-					uerror("HA interface %s unavailable", $1);
+					/* We do not allow unavailable
+					   ifaces for HA ... */
+					uerror("HA interface %s "
+					       "unavailable", $1);
 					free($1);
 					return -1;
 				}
@@ -409,6 +422,10 @@ ifaceopt	: IFTYPE mip6entity ';'
 				return -1;
 			}
  			ni.mn_if_preference = pref;
+		}
+		| ISTUNNEL BOOL ';'
+		{
+			ni.is_tunnel = $2;
 		}
 		;
 

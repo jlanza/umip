@@ -66,6 +66,7 @@ struct net_iface {
 	int is_rtr;
 	int mip6_if_entity;
 	int mn_if_preference;
+	int is_tunnel;
 };
 
 extern struct mip6_config conf;

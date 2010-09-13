@@ -277,6 +277,7 @@ Interface			{ return INTERFACE; }
 IfName				{ return IFNAME; }
 IfType				{ return IFTYPE; }
 MnIfPreference			{ return MNIFPREFERENCE; }
+Tunnel                          { return ISTUNNEL; }
 MnUseAllInterfaces     		{ return MNUSEALLINTERFACES; }
 MnRouterProbes			{ return MNROUTERPROBES; }
 MnRouterProbeTimeout		{ return MNROUTERPROBETIMEOUT; }
