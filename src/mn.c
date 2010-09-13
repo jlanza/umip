@@ -1823,8 +1823,9 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	struct in6_pktinfo pkt_info;
 	int len, iif, hoplimit;
 	struct nd_neighbor_advert *na;
-	uint8_t *hwa = NULL;
+	uint8_t hwa[L2ADDR_MAX_SIZE];
 	int ret, hwalen = 0;
+	int iface_type;
 
 	len = icmp6_recv(fd, msg, sizeof(msg), &saddr, &pkt_info, &hoplimit);
 
@@ -1838,38 +1839,49 @@ static int mn_recv_na(int fd, struct home_addr_info *hai,
 	if (iif != ifindex || hoplimit < 255 || (size_t)len < sizeof(*na) ||
 	    na->nd_na_code != 0 || IN6_IS_ADDR_MULTICAST(&na->nd_na_target) ||
 	    (na->nd_na_flags_reserved & ND_NA_FLAG_SOLICITED &&
-	     IN6_IS_ADDR_MULTICAST(daddr)))
+	     IN6_IS_ADDR_MULTICAST(daddr)) ||
+	    (!IN6_ARE_ADDR_EQUAL(addr, &na->nd_na_target)))
 		return 0;
 
-	if (hai != NULL) {
+	if (!has_home_reg)
+		return 1;
+
+	/* No need to look for HA L2 @ if no hai was provided or
+	 * if interface type does not have L2 address */
+	if (hai != NULL &&
+	    ((iface_type = nd_get_iface_type(iif)) >= 0) &&
+	    ndisc_get_l2addr_len(iface_type) > 0) {
 		int optlen = len - sizeof(struct nd_neighbor_advert);
 		uint8_t *opt = (uint8_t *)(na + 1);
 
 		while (optlen > 1) {
 			int olen = opt[1] << 3;
-			
+
 			if (olen > optlen || olen == 0) 
-				return 0;
+				return 1;
 			
 			switch (opt[0]) {
 			case ND_OPT_TARGET_LINKADDR:
-				hwa = &opt[2];
-				hwalen = opt[1] * 8 - 2;
+				hwalen = ndisc_l2addr_from_opt(iface_type,
+							       hwa, &opt[2],
+							       olen - 2);
+				if (hwalen < 0)
+					return 1;
 				break;
 			}
+
 			optlen -= olen;
 			opt += olen;
 		}
 	}
-	if (IN6_ARE_ADDR_EQUAL(addr, &na->nd_na_target)) {
-		if (has_home_reg && hwa != NULL) {
-			ret = neigh_add(iif, NUD_STALE, NTF_ROUTER,
-				  &hai->ha_addr, hwa, hwalen, 1);
-			dbg("ret %d\n", ret);
-		}
-		return 1;
+
+	if (hwalen) {
+		ret = neigh_add(iif, NUD_STALE, NTF_ROUTER,
+				&hai->ha_addr, hwa, hwalen, 1);
+		dbg("ret %d\n", ret);
 	}
-	return 0;
+
+	return 1;
 }
 
 int mn_lladdr_dad(struct ifaddrmsg *ifa, struct rtattr *rta_tb[],

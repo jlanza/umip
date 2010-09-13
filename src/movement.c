@@ -834,13 +834,11 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 		/* For interfaces w/ meaningful L2 addresses, if the address
 		 * is available and ok, we derive a link-local address */
 		if (rta_tb[IFLA_ADDRESS] != NULL  &&
-		    hwalen = nd_get_l2addr_len(ifi->ifi_type) > 0 &&
+		    (hwalen = ndisc_get_l2addr_len(ifi->ifi_type)) > 0 &&
 		    rta_tb[IFLA_ADDRESS]->rta_len == RTA_LENGTH(hwalen)) {
-			iface->hwalen = hwalen;
-			memcpy(iface->hwa, RTA_DATA(rta_tb[IFLA_ADDRESS]),
-			       hwalen);
 			ndisc_set_linklocal(&iface->lladdr,
-					    iface->hwa, iface->type);
+					    RTA_DATA(rta_tb[IFLA_ADDRESS]),
+					    iface->type);
 		}
 
 		if (rta_tb[IFLA_PROTINFO]) {
@@ -993,7 +991,7 @@ static int process_link(struct nlmsghdr *n)
 	/* Check if interface type is supported, i.e. if we have
 	 * internal logic to perform minimal L2 operations. We do
 	 * that by checking we do know HW address length. */
-	if (nd_get_l2addr_len(ifi->ifi_type) < 0) {
+	if (ndisc_get_l2addr_len(ifi->ifi_type) < 0) {
 		syslog(LOG_WARNING,
 		       "Interface %d (%s):type %d unsupported",
 		       ifi->ifi_index,
@@ -1165,12 +1163,11 @@ static struct md_router *md_create_router(struct md_inet6_iface *iface,
 			struct nd_opt_adv_interval *r;
 
 		case ND_OPT_SOURCE_LINKADDR:
-			if (iface->hwalen <= 0)
-				break;
-			if (olen < sizeof(struct nd_opt_hdr) + iface->hwalen)
+			new->hwalen = ndisc_l2addr_from_opt(iface->type,
+							    new->hwa,
+							    &opt[2], olen-2);
+			if (new->hwalen < 0)
 				goto free_rtr;
-			new->hwalen = iface->hwalen;
-			memcpy(&new->hwa, &opt[2], new->hwalen);
 			break;
 
 		case ND_OPT_PREFIX_INFORMATION:
@@ -1874,7 +1871,8 @@ static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
 	struct md_inet6_iface *iface;
 	struct md_router *rtr;
 	uint8_t *opt;
-	uint8_t *hwa;
+	uint8_t hwa[L2ADDR_MAX_SIZE];
+	int hwalen = 0;
 
 	if (hoplimit < 255 || ih->icmp6_code != 0 ||
 	    len < 0 || (size_t)len < sizeof(struct nd_neighbor_advert) ||
@@ -1893,7 +1891,6 @@ static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
 	}
 	optlen = len - sizeof(struct nd_neighbor_advert);
 	opt = (uint8_t *)(na + 1);
-	hwa = NULL;
 
 	MDBG2("received NA from %x:%x:%x:%x:%x:%x:%x:%x on iface %s (%d)\n", 
 	      NIP6ADDR(&rtr->lladdr), iface->name, iface->ifindex);
@@ -1907,8 +1904,9 @@ static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
 		
 		switch (opt[0]) {
 		case ND_OPT_TARGET_LINKADDR:
-			hwa = &opt[2];
-			if (olen < rtr->hwalen + 2)
+			hwalen = ndisc_l2addr_from_opt(iface->type, hwa,
+						       &opt[2], olen - 2);
+			if (hwalen < 0 || hwalen != rtr->hwalen)
 				goto out;
 			break;
 		}
@@ -1916,7 +1914,7 @@ static void md_recv_na(const struct icmp6_hdr *ih, ssize_t len,
 		opt += olen;
 	}
 	if (na->nd_na_flags_reserved & ND_NA_FLAG_ROUTER &&
-	    (!hwa || !memcmp(hwa, &rtr->hwa, rtr->hwalen))) {
+	    (hwalen || !memcmp(hwa, &rtr->hwa, rtr->hwalen))) {
 		struct timespec expires;
 		clock_gettime(CLOCK_REALTIME, &rtr->timestamp);
 		if (tsisset(rtr->lifetime))

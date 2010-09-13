@@ -181,28 +181,190 @@ static struct nd_opt_hdr *nd_opt_create(struct iovec *iov, uint8_t type,
 	return opt;
 }
 
-static int nd_get_l2addr(int ifindex, uint8_t *addr)
+/* Implementing support for a new interface type (ARPHRD_* from
+ * net/if_arp.h) basically requires adding the missing bits in
+ * the following 4 functions below:
+ *
+ * ndisc_get_l2addr_len()  : provides L2 address length from interface type
+ * ndisc_set_linklocal()   : constructs link-local address using L2 address
+ *                            for a given interface type.
+ * ndisc_l2addr_from_opt() : extracts L2 address from ND Src/Tgt link-layer
+ *                           address option.
+ * ndisc_l2addr_to_opt()   : construct mapping of L2 address for ND Src/Tgt
+ *                           link-layer address option.
+ *
+ * and also L2ADDR_MAX_SIZE and MAP_L2ADDR_MAX_SIZE (in ndisc.h)
+ */
+
+/* Returns the L2 address length for given interface type or -1 on error. */
+short ndisc_get_l2addr_len(unsigned short iface_type)
+{
+	switch (iface_type) {
+		/* supported physical devices */
+	case ARPHRD_ETHER:
+	case ARPHRD_IEEE802:
+	case ARPHRD_IEEE802_TR:
+	case ARPHRD_IEEE80211:
+	case ARPHRD_FDDI:
+		return 6;
+
+		/* supported virtual devices */
+	case ARPHRD_SIT:
+	case ARPHRD_TUNNEL6:
+	case ARPHRD_PPP:
+	case ARPHRD_IPGRE:
+	case ARPHRD_NONE: /* for tun devices (teredo) */
+		return 0;
+
+		/* unsupported */
+	default:
+		return -1;
+	}
+}
+
+/* Based on iface type (iface_type) and associated link-layer
+ * address (hwa), the function generates the modified eui-64
+ * and fills lladdr with link-local address.
+ *
+ * The function returns 0 on success, -EINVAL on error. */
+int ndisc_set_linklocal(struct in6_addr *lladdr, uint8_t *hwa,
+			unsigned short iface_type)
+{
+	memset(lladdr, 0, sizeof(struct in6_addr));
+	uint8_t *eui = lladdr->s6_addr + 8;
+
+	switch (iface_type) {
+	case ARPHRD_ETHER:
+	case ARPHRD_IEEE802:
+	case ARPHRD_IEEE802_TR:
+	case ARPHRD_IEEE80211:
+	case ARPHRD_FDDI:
+		memcpy(eui, hwa, 3);
+		memcpy(eui + 5, hwa + 3, 3);
+		eui[0] ^= 2;
+		eui[3] = 0xff;
+		eui[4] = 0xfe;
+		break;
+	default:
+		return -EINVAL;
+	}
+	lladdr->s6_addr[0] = 0xfe;
+	lladdr->s6_addr[1] = 0x80;
+
+	return 0;
+}
+
+/* Read content of address field (mapped_addr) of given length
+ * (mapped_addr_len) from Source/target link layer address option
+ * and reverses the mapping to get a suitable link layer address
+ * (copied in hwa, expected to be at least L2ADDR_MAX_SIZE) for
+ * the given interface type (iface_type).
+ *
+ * The length (>0) of copied link-layer address is returned on
+ * success. Otherwise, -EINVAL is returned on error (including
+ * for interface types that do not have link-layer addresses).
+ */
+int ndisc_l2addr_from_opt(unsigned short iface_type, uint8_t *hwa,
+			  uint8_t *mapped_addr, int mapped_addr_len)
+{
+	int res = 0;
+
+	switch (iface_type) {
+	case ARPHRD_ETHER:
+	case ARPHRD_IEEE802:
+	case ARPHRD_IEEE802_TR:
+	case ARPHRD_IEEE80211:
+	case ARPHRD_FDDI:
+		res = 6;
+		if (mapped_addr_len != res)
+			return -EINVAL;
+
+		memcpy(hwa, mapped_addr, res);
+		break;
+	default:
+		res = -EINVAL;
+	}
+
+	return res;
+}
+
+/* Grab the L2 address of provided interface (ifindex) and write the
+ * mapped address suitable for use in Source/Target Link-Layer Address
+ * Option of various ND packets in 'addr'. 'addr' is expected to be at
+ * least MAP_L2ADDR_MAX_SIZE.
+ *
+ * The length (>0) of constructed address copied to addr is returned
+ * on success. -1 is returned on error. 0 is return if the interface
+ * is expected not to have a L2 address
+ *
+ * Note: For ethernet, fddi and some other iface types, the mapping
+ *       is direct, i.e. L2 address are used directly. For other
+ *       protocols with different L2 address length (firewire,
+ *       ...) specific mapping are required and documented in specific
+ *       RFC documents. */
+int ndisc_l2addr_to_opt(int ifindex, uint8_t *addr)
+{
+	struct ifreq ifr;
+	int fd, res;
+
+	if ((fd = socket(PF_PACKET, SOCK_DGRAM, 0)) < 0)
+		return -1;
+
+	memset(&ifr, 0, sizeof(ifr));
+
+	if (if_indextoname(ifindex, ifr.ifr_name) == NULL ||
+	    ioctl(fd, SIOCGIFHWADDR, &ifr) < 0) {
+		res = -1;
+		goto out;
+	}
+
+	switch (ifr.ifr_hwaddr.sa_family) {
+		/* supported physical devices */
+	case ARPHRD_ETHER:
+	case ARPHRD_IEEE802:
+	case ARPHRD_IEEE802_TR:
+	case ARPHRD_IEEE80211:
+	case ARPHRD_FDDI:
+		res = 6;
+		memcpy(addr, ifr.ifr_hwaddr.sa_data, res);
+		break;
+
+		/* supported virtual devices */
+	case ARPHRD_SIT:
+	case ARPHRD_TUNNEL6:
+	case ARPHRD_PPP:
+	case ARPHRD_IPGRE:
+	case ARPHRD_NONE: /* for tun devices (teredo) */
+		res = 0;
+		break;
+
+	default:
+		/* unsupported */
+		res = -1;
+		break;
+	}
+ out:
+	close(fd);
+	return res;
+}
+
+/* Returns the interface type for given ifindex. -1 is
+ * returned on error */
+int nd_get_iface_type(int ifindex)
 {
 	struct ifreq ifr;
 	int fd;
-	int res;
- 
-	fd = socket(PF_PACKET, SOCK_DGRAM, 0);
-	if (fd < 0) return -1;
+
+	if ((fd = socket(PF_PACKET, SOCK_DGRAM, 0)) < 0)
+		return -1;
 
 	memset(&ifr, 0, sizeof(ifr));
-	if_indextoname(ifindex, ifr.ifr_name);
-	if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0) {
-		close(fd);
-		return -1;
-	}
-	if ((res = nd_get_l2addr_len(ifr.ifr_hwaddr.sa_family)) < 0)
-		dbg("Unsupported sa_family %d.\n", ifr.ifr_hwaddr.sa_family);
-	else if (res > 0)
-		memcpy(addr, ifr.ifr_hwaddr.sa_data, res);
 
-	close(fd);
-	return res;
+	if (if_indextoname(ifindex, ifr.ifr_name) == NULL ||
+	    ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
+		return -1;
+
+	return ifr.ifr_hwaddr.sa_family;
 }
 
 /* Linearize 'iov' of 'iovlen' elements in 'dst' buffer of available size
@@ -370,28 +532,33 @@ int ndisc_send_na(int ifindex, const struct in6_addr *src,
 {
 	struct nd_neighbor_advert *na;
 	struct iovec iov[2];
-	uint8_t l2addr[32];
-	int len;
+	uint8_t l2addr[L2ADDR_MAX_SIZE];
+	int len, iovlen = 0;
 
 	memset(iov, 0, sizeof(iov));
 
-	if ((len = nd_get_l2addr(ifindex, l2addr)) < 0)
+	if ((len = ndisc_l2addr_to_opt(ifindex, l2addr)) < 0)
 		return -EINVAL;
 
-	na = icmp6_create(iov, ND_NEIGHBOR_ADVERT, 0);
+	na = icmp6_create(iov, ND_NEIGHBOR_ADVERT, iovlen++);
 
-	if (na == NULL) return -ENOMEM;
-
-	if (len > 0 && nd_opt_create(&iov[1], ND_OPT_TARGET_LINKADDR,
-				     len, l2addr) == NULL) {
-		free_iov_data(iov, 1);
+	if (na == NULL)
 		return -ENOMEM;
+
+	if (len > 0) {
+		if (nd_opt_create(&iov[iovlen], ND_OPT_TARGET_LINKADDR,
+				  len, l2addr) == NULL) {
+			free_iov_data(iov, iovlen);
+			return -ENOMEM;
+		}
+		iovlen++;
 	}
+
 	na->nd_na_target = *target;
 	na->nd_na_flags_reserved = flags;
 
-	icmp6_send(ifindex, 255, src, dst, iov, 2);
-	free_iov_data(iov, 2);
+	icmp6_send(ifindex, 255, src, dst, iov, iovlen);
+	free_iov_data(iov, iovlen);
 	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_NA);
 	return 0;
 }
