@@ -1015,16 +1015,22 @@ static int process_fail_neigh(struct ndmsg *ndm, struct rtattr **rta_tb)
 {
 	struct md_inet6_iface *iface;
 	struct md_router *rtr;
+	struct in6_addr *addr;
 
-	if (nud_expire_rtr && 
-	    (iface = md_get_inet6_iface(&ifaces, ndm->ndm_ifindex)) != NULL &&
-	    (rtr = md_get_first_router(&iface->default_rtr)) != NULL) {
-		struct in6_addr *addr = RTA_DATA(rta_tb[NDA_DST]);
-		if (rtr_addr_chk(rtr, addr) || 
-		    IN6_ARE_ADDR_EQUAL(&rtr->lladdr, addr)) {
-			md_router_timeout(rtr);
-		}
-	}
+	if (!nud_expire_rtr)
+		return 0;
+
+	iface = md_get_inet6_iface(&ifaces, ndm->ndm_ifindex);
+	if (iface == NULL || iface->is_tunnel)
+		return 0;
+
+	rtr = md_get_first_router(&iface->default_rtr);
+	if (rtr == NULL)
+		return 0;
+
+	addr = RTA_DATA(rta_tb[NDA_DST]);
+	if (rtr_addr_chk(rtr,addr) || IN6_ARE_ADDR_EQUAL(&rtr->lladdr,addr))
+		md_router_timeout(rtr);
 	return 0;
 }
 
