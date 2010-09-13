@@ -23,6 +23,7 @@ static inline short nd_get_l2addr_len(unsigned short iface_type)
 	case ARPHRD_PPP:
 	case ARPHRD_IPGRE:
 		return 0;
+
 	default:
 		/* unsupported */
 		return -1;

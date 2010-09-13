@@ -820,6 +820,7 @@ static struct md_inet6_iface *
 md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 {
 	struct md_inet6_iface *iface;
+	int hwalen;
 	
 	/* Note: steps performed below are ok even for tunnel interfaces */
 	if ((iface = malloc(sizeof(struct md_inet6_iface))) != NULL) {
@@ -829,13 +830,19 @@ md_create_inet6_iface(struct ifinfomsg *ifi, struct rtattr **rta_tb)
 				IF_NAMESIZE - 1);
 		iface->link_flags = ifi->ifi_flags;
 		iface->type = ifi->ifi_type;
-		if (rta_tb[IFLA_ADDRESS]) {
-			iface->hwalen = nd_get_l2addr_len(ifi->ifi_type);
+
+		/* For interfaces w/ meaningful L2 addresses, if the address
+		 * is available and ok, we derive a link-local address */
+		if (rta_tb[IFLA_ADDRESS] != NULL  &&
+		    hwalen = nd_get_l2addr_len(ifi->ifi_type) > 0 &&
+		    rta_tb[IFLA_ADDRESS]->rta_len == RTA_LENGTH(hwalen)) {
+			iface->hwalen = hwalen;
 			memcpy(iface->hwa, RTA_DATA(rta_tb[IFLA_ADDRESS]),
-			       iface->hwalen);
+			       hwalen);
 			ndisc_set_linklocal(&iface->lladdr,
 					    iface->hwa, iface->type);
 		}
+
 		if (rta_tb[IFLA_PROTINFO]) {
 			struct rtattr *inet6_tb[IFLA_INET6_MAX+1];
 
@@ -979,24 +986,20 @@ static int process_link(struct nlmsghdr *n)
 	if (ifi->ifi_family != AF_UNSPEC && ifi->ifi_family != AF_INET6)
 		return 0;
 
-	if (ifi->ifi_type == ARPHRD_LOOPBACK)
-		return 0;
-
 	memset(rta_tb, 0, sizeof(rta_tb));
 	parse_rtattr(rta_tb, IFLA_MAX, IFLA_RTA(ifi),
 		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi)));
 
-	/* For non-AF_UNSPEC, do an additional L2 @ length check */
-	if (ifi->ifi_family != AF_UNSPEC && rta_tb[IFLA_ADDRESS] != NULL) {
-		int hwalen = nd_get_l2addr_len(ifi->ifi_type);
-		if (rta_tb[IFLA_ADDRESS]->rta_len != RTA_LENGTH(hwalen)) {
-			syslog(LOG_WARNING,
-			       "Interface %d (%s):type %d unsupported",
-			       ifi->ifi_index,
-			       (char *) RTA_DATA(rta_tb[IFLA_IFNAME]),
-			       ifi->ifi_type);
-			return 0;
-		}
+	/* Check if interface type is supported, i.e. if we have
+	 * internal logic to perform minimal L2 operations. We do
+	 * that by checking we do know HW address length. */
+	if (nd_get_l2addr_len(ifi->ifi_type) < 0) {
+		syslog(LOG_WARNING,
+		       "Interface %d (%s):type %d unsupported",
+		       ifi->ifi_index,
+		       (char *) RTA_DATA(rta_tb[IFLA_IFNAME]),
+		       ifi->ifi_type);
+		return 0;
 	}
 
 	pthread_mutex_lock(&iface_lock);
