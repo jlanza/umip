@@ -34,6 +34,9 @@
 #include <errno.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#ifndef ARPHRD_PHONET_PIPE /* e.g. gprs0 iface on Nokia N900 */
+#define ARPHRD_PHONET_PIPE 821
+#endif
 #include <netinet/ip6.h>
 #include <netinet/ip6mh.h>
 #include <libnetlink.h>
@@ -214,6 +217,7 @@ short ndisc_get_l2addr_len(unsigned short iface_type)
 	case ARPHRD_PPP:
 	case ARPHRD_IPGRE:
 	case ARPHRD_NONE: /* for tun devices (teredo) */
+	case ARPHRD_PHONET_PIPE: /* e.g. gprs0 iface on Nokia N900 */
 		return 0;
 
 		/* unsupported */
@@ -335,6 +339,7 @@ int ndisc_l2addr_to_opt(int ifindex, uint8_t *addr)
 	case ARPHRD_PPP:
 	case ARPHRD_IPGRE:
 	case ARPHRD_NONE: /* for tun devices (teredo) */
+	case ARPHRD_PHONET_PIPE: /* e.g. gprs0 iface on Nokia N900 */
 		res = 0;
 		break;
 
