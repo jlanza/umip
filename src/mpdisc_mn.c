@@ -47,6 +47,7 @@
 #include "prefix.h"
 #include "mn.h"
 #include "hash.h"
+#include "statistics.h"
 
 struct mps_entry {
 	struct in6_addr hoa;
@@ -105,6 +106,7 @@ static int mpd_send_mps(struct mps_entry *e)
 	clock_gettime(CLOCK_REALTIME, &e->lastsent);
 	icmp6_send(0, 0, &e->hoa, &e->ha, &iov, 1);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_MPS);
 	return 0;
 }
 

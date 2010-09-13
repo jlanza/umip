@@ -52,6 +52,7 @@
 #include "bcache.h"
 #include "keygen.h"
 #include "prefix.h"
+#include "statistics.h"
 
 #define MH_DEBUG_LEVEL 1
 
@@ -727,6 +728,7 @@ int mh_send(const struct in6_addr_bundle *addrs, const struct iovec *mh_vec,
 
 	free(msg.msg_control);
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_MH);
 	return ret;
 }
 
@@ -860,6 +862,8 @@ ssize_t mh_recv(unsigned char *msg, size_t msglen,
 	memset(haoaddr, 0, sizeof(*haoaddr));
 	memset(rtaddr, 0, sizeof(*rtaddr));
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_MH);
+
 	for (cmsg = CMSG_FIRSTHDR(&mhdr); cmsg;
 	     cmsg = CMSG_NXTHDR(&mhdr, cmsg)) {
 		int ret = 0;
@@ -890,6 +894,7 @@ ssize_t mh_recv(unsigned char *msg, size_t msglen,
 					MDBG("Invalid rth\n");
 				else
 					*rtaddr = *seg;
+				statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_RH2);
 			}
 			break;
 		}
@@ -918,6 +923,7 @@ ssize_t mh_recv(unsigned char *msg, size_t msglen,
 	/* No need to perform any other validity checks, since kernel
 	 * does this for us. */
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_MH);
 	return len;
 }
 
@@ -949,6 +955,7 @@ void mh_send_be(struct in6_addr *dst, struct in6_addr *hoa,
 
 	mh_send(&out, &iov, 1, NULL, iif);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_BE);
 }
 
 /* Check if binding has been used recently and send a binding refresh
@@ -982,6 +989,7 @@ void mh_send_brr(struct in6_addr *mn_addr, struct in6_addr *local)
 	
 	mh_send(&addrs, &mh_vec, 1, NULL, 0);
 	free_iov_data(&mh_vec, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_BRR);
 }
 
 void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status,
@@ -1016,6 +1024,7 @@ void mh_send_ba(const struct in6_addr_bundle *addrs, uint8_t status,
 		mh_create_opt_auth_data(&mh_vec[iovlen++]);
 	mh_send(addrs, mh_vec, iovlen, key, iif);
 	free_iov_data(mh_vec, iovlen);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_BA);
 }
 
 /* Main BU parser, used by both HA (H flag set) and CN (H flag not set).

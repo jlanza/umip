@@ -45,6 +45,7 @@
 #include "ndisc.h"
 #include "rtnl.h"
 #include "proc_sys.h"
+#include "statistics.h"
 
 static int neigh_mod(int nl_flags, int cmd, int ifindex,
 		     uint16_t state, uint8_t flags, struct in6_addr *dst,
@@ -256,7 +257,7 @@ static int ndisc_send_unspec(int oif, const struct in6_addr *dest,
 	char cbuf[CMSG_SPACE(sizeof(*pinfo))];
 	struct iovec iov;
 	uint8_t *data = (uint8_t *)(&frame.icmp);
-	int fd, ret, remlen, datalen = 0, written = 0, v = 1;
+	int type, fd, ret, remlen, datalen = 0, written = 0, v = 1;
 
 	if (hdr == NULL || hdrlen < 0 ||
 	    (size_t)hdrlen < sizeof(struct icmp6_hdr) ||
@@ -326,6 +327,12 @@ static int ndisc_send_unspec(int oif, const struct in6_addr *dest,
 		dbg("sendmsg: %s\n", strerror(errno));
 
 	close(fd);
+	type = hdr[0];
+	if (type == ND_NEIGHBOR_SOLICIT) {
+		statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_NS_UNSPEC);
+	} else if (type == ND_ROUTER_SOLICIT) {
+		statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_RS_UNSPEC);
+	}
 	return ret;
 }
 
@@ -385,6 +392,7 @@ int ndisc_send_na(int ifindex, const struct in6_addr *src,
 
 	icmp6_send(ifindex, 255, src, dst, iov, 2);
 	free_iov_data(iov, 2);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_NA);
 	return 0;
 }
 

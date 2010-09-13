@@ -65,6 +65,7 @@
 #include "mn.h"
 #include "mpdisc_mn.h"
 #include "mpdisc_ha.h"
+#include "statistics.h"
 
 #define VT_PKT_BUFLEN		(8192)
 #define VT_REPLY_BUFLEN		(LINE_MAX)
@@ -225,6 +226,116 @@ static int vt_cmd_sys_prompt(const struct vt_handle *vh,
 	return 0;
 }
 
+static int vt_cmd_showstats(const struct vt_handle *vh, __attribute__ ((unused)) const char *str)
+{
+	pthread_mutex_lock(&mipl_stat.lock);
+	fprintf(vh->vh_stream, "Input Statistics:\n");
+	fprintf(vh->vh_stream, "     %lu Mobility Headers\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_MH]);
+	fprintf(vh->vh_stream, "     %lu HoTI messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_HOTI]);
+	fprintf(vh->vh_stream, "     %lu CoTI messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_COTI]);
+	fprintf(vh->vh_stream, "     %lu HoT messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_HOT]);
+	fprintf(vh->vh_stream, "     %lu CoT messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_COT]);
+	fprintf(vh->vh_stream, "     %lu BU messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_BU]);
+	fprintf(vh->vh_stream, "     %lu BA messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_BA]);
+	fprintf(vh->vh_stream, "     %lu BR messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_BRR]);
+	fprintf(vh->vh_stream, "     %lu BE messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_BE]);
+
+	fprintf(vh->vh_stream, "     %lu DHAAD request\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_DHAAD_REQ]);
+	fprintf(vh->vh_stream, "     %lu DHAAD reply\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_DHAAD_REP]);
+	fprintf(vh->vh_stream, "     %lu MPA\n", 0L);
+	fprintf(vh->vh_stream, "     %lu MPS\n", 0L);
+	fprintf(vh->vh_stream, "     %lu Home Address Option\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_HAO]);
+	fprintf(vh->vh_stream, "     %lu unverified Home Address Option\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_HAO]);
+	fprintf(vh->vh_stream, "     %lu Routing Header type 2\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_RH2]);
+
+	fprintf(vh->vh_stream, "     %lu reverse tunnel input\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_RTUN]);
+	fprintf(vh->vh_stream, "     %lu bad MH checksum\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_MH_CHK]);
+	fprintf(vh->vh_stream, "     %lu bad payload protocol\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_PAYLOAD]);
+	fprintf(vh->vh_stream, "     %lu unknown MH type\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_UNKNOWN_MH]);
+	fprintf(vh->vh_stream, "     %lu not my home address\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_NOT_HOA]);
+	fprintf(vh->vh_stream, "     %lu no related binding update entry\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_NO_BU]);
+	fprintf(vh->vh_stream, "     %lu home init cookie mismatch\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_H_COOKIE]);
+	fprintf(vh->vh_stream, "     %lu careof init cookie mismatch\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_C_COOKIE]);
+	fprintf(vh->vh_stream, "     %lu unprotected binding signaling packets\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_UNSAFEBU]);
+	fprintf(vh->vh_stream, "     %lu BUs discarded due to bad HAO\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_BU_HAO]);
+	fprintf(vh->vh_stream, "     %lu RR authentication failed\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_RR_FAIL]);
+	fprintf(vh->vh_stream, "     %lu seqno mismatch\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_SEQ]);
+	fprintf(vh->vh_stream, "     %lu parameter problem for HAO\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_HAO_PARAM]);
+	fprintf(vh->vh_stream, "     %lu parameter problem for MH\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_MH_PARAM]);
+	fprintf(vh->vh_stream, "     %lu Invalid Care-of address\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_COA]);
+	fprintf(vh->vh_stream, "     %lu Invalid mobility options\n",
+		   	mipl_stat.values[MIPL_STATISTICS_IN_X_MOBOPT]);
+
+	fprintf(vh->vh_stream, "Output Statistics:\n");
+
+	fprintf(vh->vh_stream, "     %lu Mobility Headers\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_MH]);
+	fprintf(vh->vh_stream, "     %lu HoTI messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_HOTI]);
+	fprintf(vh->vh_stream, "     %lu CoTI messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_COTI]);
+	fprintf(vh->vh_stream, "     %lu HoT messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_HOT]);
+	fprintf(vh->vh_stream, "     %lu CoT messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_COT]);
+	fprintf(vh->vh_stream, "     %lu BU messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_BU]);
+	fprintf(vh->vh_stream, "     %lu BA messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_BA]);
+	fprintf(vh->vh_stream, "     %lu BR messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_BRR]);
+	fprintf(vh->vh_stream, "     %lu BE messages\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_BE]);
+
+	fprintf(vh->vh_stream, "     %lu DHAAD request\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_DHAAD_REQ]);
+	fprintf(vh->vh_stream, "     %lu DHAAD reply\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_DHAAD_REP]);
+	fprintf(vh->vh_stream, "     %lu MPA\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_MPA]);
+	fprintf(vh->vh_stream, "     %lu MPS\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_MPS]);
+	fprintf(vh->vh_stream, "     %lu Home Address Option\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_HAO]);
+	fprintf(vh->vh_stream, "     %lu Routing Header type 2\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_RH2]);
+	fprintf(vh->vh_stream, "     %lu reverse tunneled input\n",
+		   	mipl_stat.values[MIPL_STATISTICS_OUT_RTUN]);
+
+	pthread_mutex_unlock(&mipl_stat.lock);
+
+	return 0;
+}
+
 static int vt_cmd_sys_quit(const struct vt_handle *vh,
 			   __attribute__ ((unused)) const char *str)
 {
@@ -298,6 +409,11 @@ static struct vt_cmd_entry vt_cmd_fancy_off = {
 	.parser = vt_cmd_sys_fancy_off,
 };
 
+static struct vt_cmd_entry vt_cmd_stats = {
+	.cmd = "stats",
+	.parser = vt_cmd_showstats,
+};
+
 static int vt_cmd_sys_init(void)
 {
 	int ret;
@@ -337,6 +453,10 @@ static int vt_cmd_sys_init(void)
 	if (ret < 0)
 		return ret;
 	ret = vt_cmd_add(&vt_cmd_fancy, &vt_cmd_fancy_off);
+	if (ret < 0)
+		return ret;
+
+	ret = vt_cmd_add_root(&vt_cmd_stats);
 	if (ret < 0)
 		return ret;
 

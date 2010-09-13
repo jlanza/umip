@@ -59,6 +59,7 @@
 #include "xfrm.h"
 #include "ndisc.h"
 #include "prefix.h"
+#include "statistics.h"
 
 static pthread_mutex_t bu_worker_mutex;
 static volatile unsigned long bu_worker_count = 0;
@@ -1166,6 +1167,8 @@ int ha_recv_home_bu(const struct ip6_mh *mh, ssize_t len,
 	struct timespec lft;
 	int status;
 	pthread_t worker;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BU);
 
 	bu = (struct ip6_mh_binding_update *)mh;
 

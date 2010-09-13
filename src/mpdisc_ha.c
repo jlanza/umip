@@ -47,6 +47,7 @@
 #include "ha.h"
 #include "ndisc.h"
 #include "hash.h"
+#include "statistics.h"
 
 struct mpa_entry {
 	struct in6_addr ha;
@@ -206,6 +207,7 @@ static void mpd_send_mpa(struct mpa_entry *e, uint16_t id)
 	icmp6_send(iface->ifindex, 0, &e->ha, &e->hoa, iov, 2);
 	free_iov_data(iov, 2);
 	e->lastsent = now;
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_MPA);
 }
 
 void mpd_cancel_mpa(const struct in6_addr *ha, const struct in6_addr *hoa)

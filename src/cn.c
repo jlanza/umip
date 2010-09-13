@@ -46,6 +46,7 @@
 #include "retrout.h"
 #include "cn.h"
 #include "conf.h"
+#include "statistics.h"
 
 #define MH_DEBUG_LEVEL 1
 
@@ -107,6 +108,8 @@ static void cn_recv_hoti(const struct ip6_mh *mh, ssize_t len,
 	struct iovec iov;
 	uint8_t keygen_token[8];
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_HOTI);
+
 	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_home_test_init) ||
 	    in->remote_coa)
 		return;
@@ -123,6 +126,7 @@ static void cn_recv_hoti(const struct ip6_mh *mh, ssize_t len,
 	memcpy(hot->ip6mhht_keygen, keygen_token, 8);
 	mh_send(&out, &iov, 1, NULL, iif);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_HOT);
 }
 
 static struct mh_handler cn_hoti_handler = {
@@ -137,6 +141,8 @@ static void cn_recv_coti(const struct ip6_mh *mh, ssize_t len,
 	struct in6_addr_bundle out;
 	struct iovec iov;
 	uint8_t keygen_token[8];
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_COTI);
 
 	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_careof_test_init) ||
 	    in->remote_coa)
@@ -154,6 +160,7 @@ static void cn_recv_coti(const struct ip6_mh *mh, ssize_t len,
 	memcpy(cot->ip6mhct_keygen, keygen_token, 8);
 	mh_send(&out, &iov, 1, NULL, iif);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_COT);
 }
 
 static struct mh_handler cn_coti_handler = {
@@ -214,6 +221,8 @@ void cn_recv_bu(const struct ip6_mh *mh, ssize_t len,
 	uint16_t bu_flags, seqno;
 	uint8_t key[HMAC_SHA1_KEY_SIZE];
 	uint8_t *pkey = NULL;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BU);
 
 	bu = (struct ip6_mh_binding_update *)mh;
 

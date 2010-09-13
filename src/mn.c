@@ -64,6 +64,7 @@
 #include "keygen.h"
 #include "dhaad_mn.h"
 #include "ipsec.h"
+#include "statistics.h"
 
 #define MN_DEBUG_LEVEL 1
 
@@ -271,9 +272,11 @@ static void mn_recv_param_prob(const struct icmp6_hdr *ih, ssize_t len,
 	if (ih->icmp6_code == ICMP6_PARAMPROB_NEXTHEADER && 
 	    *off_octet == IPPROTO_MH) {
 		MDBG("CN doesn't implement MH handling.\n");
+		statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_X_MH_PARAM);
 	} else if (ih->icmp6_code == ICMP6_PARAMPROB_OPTION &&
 		  *off_octet == IP6OPT_HOME_ADDRESS) {
 		MDBG("CN doesn't implement Home Address Option processing\n");
+		statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_X_HAO_PARAM);
 	} else {
 		MDBG("Got ICMPv6 paramprob not resulting from HAO or MH\n");
 		return;
@@ -361,6 +364,7 @@ static int mn_send_bu_msg(struct bulentry *bule)
 		MDBG("mh_send failed  ret: %d\n", ret);
 
 	free_iov_data(iov, iov_ind);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_BU);
 	
 	return ret;
 }
@@ -1038,6 +1042,8 @@ static void mn_recv_ba(const struct ip6_mh *mh, ssize_t len,
 	uint16_t seqno;
 
 	TRACE;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BA);
 
 	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_binding_ack) ||
 	    mh_opt_parse(mh, len,
@@ -2472,6 +2478,8 @@ static void mn_recv_brr(__attribute__ ((unused)) const struct ip6_mh *mh,
 	struct timespec now;
 	long last_used;
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BRR);
+
 	if (len <  0 || (size_t)len < sizeof(struct ip6_mh_binding_request))
 		return;
 
@@ -2509,6 +2517,8 @@ static void mn_recv_be(const struct ip6_mh *mh, ssize_t len,
 	struct in6_addr *cn, *hoa;
 	struct timespec now;
 	struct in6_addr addr;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_BE);
 
 	if (len <  0 || (size_t)len < sizeof(struct ip6_mh_binding_error))
 		return;

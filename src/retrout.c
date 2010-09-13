@@ -50,6 +50,7 @@
 #include "keygen.h"
 #include "retrout.h"
 #include "conf.h"
+#include "statistics.h"
 
 #define RR_DEBUG_LEVEL 1
 
@@ -319,6 +320,7 @@ static void mn_send_hoti(struct in6_addr *hoa, struct in6_addr *peer,
 
 	mh_send(&out, &iov, 1, NULL, oif);
 	free(iov.iov_base);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_HOTI);
 }
 
 static void mn_send_coti(struct in6_addr *coa, struct in6_addr *peer,
@@ -346,6 +348,7 @@ static void mn_send_coti(struct in6_addr *coa, struct in6_addr *peer,
 
 	mh_send(&out, &iov, 1, NULL, oif);
 	free(iov.iov_base);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_COTI);
 }
 
 /* Resend HoTI or CoTI, if we haven't got HoT or CoT */ 
@@ -662,6 +665,8 @@ static void mn_recv_cot(const struct ip6_mh *mh, ssize_t len,
 	struct ip6_mh_careof_test *ct;
 	struct list_head *list, *n;
 
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_COT);
+
 	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_careof_test) ||
 	    in->remote_coa)
 		return;
@@ -753,6 +758,8 @@ static void mn_recv_hot(const struct ip6_mh *mh, ssize_t len,
 	struct rrlentry *rre_co = NULL;
 	struct bulentry *bule = NULL;
 	struct ip6_mh_home_test *ht;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_HOT);
 
 	if (len < 0 || (size_t)len < sizeof(struct ip6_mh_home_test) ||
 	    in->remote_coa)

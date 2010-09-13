@@ -57,6 +57,7 @@
 #include "vt.h"
 #endif
 #include "tunnelctl.h"
+#include "statistics.h"
 
 static void sig_child(__attribute__ ((unused)) int unused)
 {
@@ -74,6 +75,7 @@ static void reinit(void)
 
 
 struct mip6_config conf;
+struct mip6_stat mipl_stat;
 
 static void terminate(void)
 {

@@ -41,6 +41,7 @@
 #include "mn.h"
 #include "debug.h"
 #include "xfrm.h"
+#include "statistics.h"
 
 /*********************************************************
  * Mobile Node functions
@@ -103,6 +104,7 @@ static int dhaad_send_request(int oif, struct in6_addr *src,
 	dhaad_gen_ha_anycast(&dst, pfx, plen);
 	icmp6_send(oif, 0, src, &dst, &iov, 1);
 	free_iov_data(&iov, 1);
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_OUT_DHAAD_REQ);
 	return id;
 }
 
@@ -244,6 +246,8 @@ static void dhaad_recv_rep(const struct icmp6_hdr *ih, ssize_t len,
 	int ulen = len - sizeof(struct icmp6_hdr);
 	int n_addr = ulen >> 4;
 	uint16_t id;
+
+	statistics_inc(&mipl_stat, MIPL_STATISTICS_IN_DHAAD_REP);
 
 	/* Check packet validity */
 	if (ulen % sizeof(struct in6_addr) || rph->mip_dhrep_code)
