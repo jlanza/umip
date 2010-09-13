@@ -1196,19 +1196,104 @@ static void md_router_timeout_probe(struct tq_elem *tqe)
 	pthread_mutex_unlock(&iface_lock);
 }
 
+/* Some notes on route metric, interface preferences and router preferences:
+ *
+ * Below, we deal with the metric associated with default routes. As a
+ * remainder, on Linux, the higher the metric value on the route, the
+ * lower the priority of the route. Usual IPv6 routes installed by kernel
+ * from RA are given a priority of 1024.
+ *
+ * In UMIP, the *basis* we use for the default metric we use is 1023
+ * (DEFAULT_ROUTE_METRIC as defined below). This value is not used
+ * directly for the route metric. Keep reading.
+ *
+ * In UMIP, interfaces are given preference values, used by the policy
+ * manager for the selection of interfaces. Preference values are
+ * in the range [1, POL_MN_IF_MIN_PREFERENCE] (i.e. 10). The higher the
+ * value, the lower the preference. Note that 0 means the interface
+ * will not be used. The preference value for a given interface is also
+ * used in the computation of the metric m for the default route associated
+ * with the interface:
+ *
+ *  m = DEFAULT_ROUTE_METRIC - 3*(POL_MN_IF_MIN_PREFERENCE - ifpref)
+ *
+ * And because multiple routers may be available on a subnet associated
+ * with a given interface and may report specific router preference
+ * values, i.e. 'low' (3), 'medium' (0) or 'high' (1) (see Section 2.1 of
+ * RFC 4191), the router preference advertised by a router is also used
+ * in the computation of the *final* metric (hence the 3 above) for the
+ * default route via a given router:
+ *
+ *   rtrpref is 'low' (-1)  =>  m = m-1
+ *   rtrpref is 'high' (1)  =>  m = m+1
+ *   rtrpref is sth else    =>  m is untouched
+ */
+
+#define DEFAULT_ROUTE_METRIC 1023
+
+/* Return 1 if new router has a strictly lower default router preference
+ * value than old one. */
+static int md_router_prefer_old(struct md_router *old, struct md_router *new)
+{
+	uint8_t old_prf_flag = (old->ra_flags >> 3) & 0x03;
+	uint8_t new_prf_flag = (new->ra_flags >> 3) & 0x03;
+	int old_prf_val, new_prf_val;
+
+	/* Map flags (low, medium, high) to -1, 0, 1. Reserved val (0b00)
+	 * is mapped to medium, i.e. 0. */
+	old_prf_val = ((old_prf_flag >> 1) ? -1 : 1) * (old_prf_flag & 0x1);
+	new_prf_val = ((new_prf_flag >> 1) ? -1 : 1) * (new_prf_flag & 0x1);
+
+	return (new_prf_val < old_prf_val);
+}
+
+/* Given the interface preference between 1 and POL_MN_IF_MIN_PREFERENCE
+ * and a router preference value (0 if none), the function returns a metric
+ * to use for the default route using that interface via that router. */
+static uint32_t md_router_compute_def_route_metric(uint16_t iface_pref,
+						   uint8_t  rtr_pref)
+{
+	uint32_t metric = DEFAULT_ROUTE_METRIC;
+	metric -= 3*(POL_MN_IF_MIN_PREFERENCE - iface_pref);
+
+	if (iface_pref > POL_MN_IF_MIN_PREFERENCE ||
+	    iface_pref == 0) /* 0 should not be met */
+		iface_pref = POL_MN_IF_MIN_PREFERENCE;
+
+	/* "sub-modulate" with possible def rtr pref from RA. We
+	 * simply consider it as a two-bit signed integer here */
+	metric -= (((rtr_pref & 0x3) >> 1) ? -1 : 1) * (rtr_pref & 0x1);
+
+	return metric;
+}
+
 static void md_update_router_stats(struct md_router *rtr)
 {
 	struct list_head *list;
 	struct in6_addr coa;
-
-	MDBG2("adding default route via %x:%x:%x:%x:%x:%x:%x:%x\n", 
-	      NIP6ADDR(&rtr->lladdr));
+	uint8_t rtr_pref = (rtr->ra_flags >> 3) & 0x03;
+	uint32_t metric;
+	uint16_t iface_pref = POL_MN_IF_MIN_PREFERENCE;
+	struct md_inet6_iface *iface;
 
 	neigh_add(rtr->ifindex, NUD_STALE, NTF_ROUTER,
 		  &rtr->lladdr, rtr->hwa, rtr->hwalen, 1);
 
+	/* Deal with interface preference as set by user ... */
+	if ((iface = md_get_inet6_iface(&ifaces, rtr->ifindex)) == NULL)
+		MDBG2("Router we are inserting a route for is "
+		      "reachable via an unknown interface (%d)\n",
+		      ifi->ifi_index);
+	else
+		iface_pref = iface->preference;
+
+	metric = md_router_compute_def_route_metric(iface_pref, rtr_pref);
+
+	MDBG2("adding default route via %x:%x:%x:%x:%x:%x:%x:%x with metric"
+	      " %d\n", NIP6ADDR(&rtr->lladdr), metric);
+
 	route_add(rtr->ifindex, RT_TABLE_MAIN, RTPROT_RA,
-		  RTF_DEFAULT|RTF_ADDRCONF, 1024,
+		  RTF_DEFAULT|RTF_ADDRCONF, metric,
 		  &in6addr_any, 0, &in6addr_any, 0, &rtr->lladdr);
 	
 	list_for_each(list, &rtr->prefixes) {
@@ -1218,15 +1303,17 @@ static void md_update_router_stats(struct md_router *rtr)
 		if (!tsbefore(rtr->timestamp, p->timestamp) &&
 		    p->ple_prefd_time <= p->ple_valid_time) {
 			ipv6_addr_set(&coa,
-				(&p->ple_prefix)->s6_addr32[0],
-				(&p->ple_prefix)->s6_addr32[1],
-				(&(rtr->iface)->lladdr)->s6_addr32[2],
-				(&(rtr->iface)->lladdr)->s6_addr32[3]);
-			MDBG("add coa %x:%x:%x:%x:%x:%x:%x:%x on interface (%d)\n",
-						NIP6ADDR(&coa),rtr->ifindex);
+				      (&p->ple_prefix)->s6_addr32[0],
+				      (&p->ple_prefix)->s6_addr32[1],
+				      (&(rtr->iface)->lladdr)->s6_addr32[2],
+				      (&(rtr->iface)->lladdr)->s6_addr32[3]);
+
+			MDBG("Adding CoA %x:%x:%x:%x:%x:%x:%x:%x on interface"
+			     " (%d)\n", NIP6ADDR(&coa),rtr->ifindex);
 
 			addr_add(&coa, p->ple_plen, 0, RT_SCOPE_UNIVERSE,
-				rtr->ifindex, p->ple_prefd_time,p->ple_valid_time);
+				 rtr->ifindex, p->ple_prefd_time,
+				 p->ple_valid_time);
 
 			if (p->ple_flags & ND_OPT_PI_FLAG_RADDR)
 				neigh_add(rtr->ifindex, NUD_STALE,
@@ -1515,27 +1602,38 @@ md_check_default_router(struct md_inet6_iface *iface, struct md_router *new)
 	MDBG2("looking for existing routers on iface %s (%d)\n", 
 	      iface->name, iface->ifindex);
 
-	if ((old = md_get_first_router(&iface->default_rtr)) != NULL) {
-		if (!md_router_cmp(new, old)) {
-			md_update_router(new, old);
-			if (!tsisset(old->lifetime)) {
-				md_expire_router(iface, old, NULL);
-				__md_discover_router(iface);
-				__md_trigger_movement_event(ME_RTR_EXPIRED, 0,
-							    iface, NULL);
-			} else {
-				__md_new_link(iface, 0);
-				__md_trigger_movement_event(ME_RTR_UPDATED, 0,
-							    iface, NULL);
-			}
-			return;
-		} 
-		if (conf.MnRouterProbes > 0) {
-			md_probe_router(old);
-			md_add_backup_router(iface, new);
-			return;
-		}
+	if ((old = md_get_first_router(&iface->default_rtr)) == NULL)
+		goto change_def_rtr;
+
+	/* We had a default router referenced on that interface (old).
+	 * Now check if new one and old one are in fact the same. */
+	if (md_router_cmp(new, old))
+		goto new_router_found;
+
+	md_update_router(new, old); /* new: freed in update */
+	if (!tsisset(old->lifetime)) {
+		md_expire_router(iface, old, NULL);
+		__md_discover_router(iface);
+		__md_trigger_movement_event(ME_RTR_EXPIRED, 0, iface, NULL);
+	} else {
+		__md_new_link(iface, 0);
+		__md_trigger_movement_event(ME_RTR_UPDATED, 0, iface, NULL);
 	}
+	return;
+
+ new_router_found:
+	/* There are some cases for which we want to perform NUD against
+	 * old router instead of directly switching to new:
+	 *  - if new has lower default router preference value
+	 *  - if asked by configuration to perform NUD before switching
+	 * In that case, the new router becomes a backup router */
+	if (md_router_prefer_old(old, new) || conf.MnRouterProbes > 0) {
+		md_probe_router(old);
+		md_add_backup_router(iface, new);
+		return;
+	}
+
+ change_def_rtr:
 	md_change_default_router(iface, new, old);
 }
 

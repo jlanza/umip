@@ -6,7 +6,8 @@
 #include <netinet/in.h>
 #include "list.h"
 
-#define POL_MN_IF_DEF_PREFERENCE 5
+#define POL_MN_IF_MIN_PREFERENCE 10
+#define POL_MN_IF_DEF_PREFERENCE POL_MN_IF_MIN_PREFERENCE
 
 struct ip6_mh_binding_update;
 struct nd_router_advert;

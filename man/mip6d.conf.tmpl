@@ -88,15 +88,24 @@ available.
 
 .B MnIfPreference
 sets the interface preference value for an interface in a multi-homed
-Mobile Node.  The most preferred intefaces have preference 1, the
-second most preferred have 2, etc.  A preference of zero means the
-interface will not be used.
+Mobile Node.  The most preferred interfaces have preference 1, the
+second most preferred have 2, etc. Values between 0 and 10 are allowed.
+A preference of zero means the interface will not be used.
 
-Default: 5
+The interface preference has a direct impact on the metric of default
+routes configured by the daemon from RA information. Note that if two
+interfaces with associated default routes have the same preference value,
+the routes will end up having the same metric, except if different default
+router preference (RFC 4191) values are provided in RA. In a sense,
+MnIfPreference value value is the primary selector for interface and
+default route selection and  default router preference value provided
+in RA can then be used to break a tie.
+
+Default: 10
 
 .B IfType
 overrides the default node behavior for this interface. If a MN doesn't
-wish to use this inteface for mobility, or a node doesn't act as HA on
+wish to use this interface for mobility, or a node doesn't act as HA on
 this interface, the interface type should be set to CN.
 
 Default: same as
@@ -307,9 +316,11 @@ Default: disabled
 .BR "MnRouterProbes " "number" ";"
 
 Indicates how many times the MN should send Neighbor Unreachability
-Detection probes to its old router after receiving a Router
-Advertisement from a new one.  If the option is set to zero, the MN
-will move to the new router straight away.
+Detection (NUD) probes to its old router after receiving a Router
+Advertisement (RA) from a new one. If the option is set to zero or
+the new router advertises a strictly higher default preference value
+than the old one (as defined in RFC 4191), the MN will move to the new
+router straight away.
 
 Default: 0
 

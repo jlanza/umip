@@ -401,7 +401,14 @@ ifaceopt	: IFTYPE mip6entity ';'
 		} 
 		| MNIFPREFERENCE NUMBER ';'
 		{
-			ni.mn_if_preference = $2;
+			int pref = $2;
+			if ((pref > POL_MN_IF_MIN_PREFERENCE) || (pref < 0)) {
+				uerror("Found bad interface preference value "
+				       "(%d). Valid range is [0,%d].\n", pref,
+				       POL_MN_IF_MIN_PREFERENCE);
+				return -1;
+			}
+ 			ni.mn_if_preference = pref;
 		}
 		;
 
