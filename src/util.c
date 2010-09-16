@@ -46,7 +46,7 @@ uint16_t in6_cksum(const struct in6_addr *src, const struct in6_addr *dst,
 
 	/* Prepare pseudo header for csum */
 	memset(&phdr, 0, sizeof(phdr));
-	phdr.dst = *src;
+	phdr.src = *src;
 	phdr.dst = *dst;
 	phdr.plen = htonl(datalen);
 	phdr.nxt = nh;
