@@ -4,7 +4,10 @@
 AUTOMAKE_OPTIONS = gnu
 EXTRA_DIST = BUGS INSTALL.kernel README.IPsec chkconf_kernel.sh \
 	     extras/example-cn.conf extras/example-ha.conf \
-             extras/example-mn.conf
+             extras/example-mn.conf licenses
+
+MAINTAINERCLEANFILES =  aclocal.m4 config.guess config.sub \
+			configure ylwrap Makefile.in
 
 if MISSING
 LIBMISSING = libmissing

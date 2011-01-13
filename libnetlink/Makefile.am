@@ -1,6 +1,8 @@
 ## $Id$
 ## Process this file with automake to produce Makefile.in
 
+MAINTAINERCLEANFILES = Makefile.in
+
 AM_CFLAGS = -Wstrict-prototypes -Wall
 AM_CPPFLAGS = -I../include
 

@@ -3,6 +3,8 @@
 
 AM_CFLAGS = -Wall
 
+MAINTAINERCLEANFILES = Makefile.in
+
 noinst_LIBRARIES = libmissing.a
 libmissing_a_SOURCES =
 libmissing_a_LIBADD = $(LIBOBJS)

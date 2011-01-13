@@ -7,6 +7,7 @@ dist_man7_MANS = mipv6.man
 BUILT_SOURCES = $(dist_man1_MANS) $(dist_man5_MANS) $(dist_man7_MANS)
 CLEANFILES = $(dist_man1_MANS) $(dist_man5_MANS) $(dist_man7_MANS)
 EXTRA_DIST = mip6d.tmpl mip6d.conf.tmpl mipv6.tmpl 
+MAINTAINERCLEANFILES = Makefile.in
 
 %.man: %.tmpl
 	$(SED) -e 's#%DATE%#@PACKAGE_DATE@#' \

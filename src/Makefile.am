@@ -5,7 +5,7 @@ AM_CFLAGS = -Wall -Wextra -Wpointer-arith -Wreturn-type -pedantic -std=gnu99
 AM_CPPFLAGS = -isystem ../include
 AM_YFLAGS = -d
 
-defpath.h: Makefile.am
+defpath.h: $(top_builddir)/config.h
 	echo "#define DEFAULT_CONFIG_FILE \"$(sysconfdir)/mip6d.conf\"" > $@
 
 pmgr.c: mk-pmgr_c.sh pmgr.c.in policy.h
@@ -48,7 +48,8 @@ mip6d_SOURCES = pmgr.c pmgr.h defpath.h \
 		xfrm.c xfrm.h \
 		proc_sys.c proc_sys.h \
 		prefix.c prefix.h \
-		ipsec.c ipsec.h
+		ipsec.c ipsec.h \
+		statistics.h
 
 if ENABLE_VT
 mip6d_SOURCES += vt.c vt.h
@@ -77,3 +78,5 @@ noinst_HEADERS = ../include/netinet/icmp6.h \
 CLEANFILES = gram.c gram.h \
 	     pmgr.c pmgr.h \
 	     scan.c
+
+MAINTAINERCLEANFILES = Makefile.in $(BUILT_SOURCES)
