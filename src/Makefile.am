@@ -2,7 +2,7 @@
 ## Process this file with automake to produce Makefile.in
 
 AM_CFLAGS = -Wall -Wextra -Wpointer-arith -Wreturn-type -pedantic -std=gnu99
-AM_CPPFLAGS = -isystem ../include
+AM_CPPFLAGS = -isystem $(top_srcdir)/include
 AM_YFLAGS = -d
 
 defpath.h: $(top_builddir)/config.h
@@ -62,21 +62,22 @@ endif
 mip6d_LDADD = 
 
 if MISSING
-mip6d_LDADD += -L../libmissing -lmissing
+mip6d_LDADD += -L$(top_builddir)/libmissing -lmissing
 endif
 
 if LOCAL_NETLINK
-mip6d_LDADD += -L../libnetlink -lnetlink
+mip6d_LDADD += -L$(top_builddir)/libnetlink -lnetlink
 endif
 
-noinst_HEADERS = ../include/netinet/icmp6.h \
-		 ../include/netinet/in.h \
-		 ../include/netinet/ip6.h \
-		 ../include/netinet/ip6mh.h \
-		 ../include/linux/xfrm.h
+noinst_HEADERS = $(top_srcdir)/include/netinet/icmp6.h \
+		 $(top_srcdir)/include/netinet/in.h \
+		 $(top_srcdir)/include/netinet/ip6.h \
+		 $(top_srcdir)/include/netinet/ip6mh.h \
+		 $(top_srcdir)/include/linux/xfrm.h
 
 CLEANFILES = gram.c gram.h \
 	     pmgr.c pmgr.h \
 	     scan.c
 
-MAINTAINERCLEANFILES = Makefile.in $(BUILT_SOURCES)
+DISTCLEANFILES = $(BUILT_SOURCES)
+MAINTAINERCLEANFILES = Makefile.in

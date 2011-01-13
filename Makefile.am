@@ -7,7 +7,8 @@ EXTRA_DIST = BUGS INSTALL.kernel README.IPsec chkconf_kernel.sh \
              extras/example-mn.conf licenses
 
 MAINTAINERCLEANFILES =  aclocal.m4 config.guess config.sub \
-			configure ylwrap Makefile.in
+			configure config.h.in \
+			ylwrap Makefile.in $(DIST_ARCHIVES)
 
 if MISSING
 LIBMISSING = libmissing
