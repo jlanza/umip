@@ -370,7 +370,7 @@ ifacedef	: QSTRING ifacesub
 				uerror("Use of tunnel interface is not"
 				       " possible for HA yet");
 				free($1);
-					return -1;
+				return -1;
 			}
 			if (ni.ifindex <= 0) {
 				if (is_if_ha(&ni)) {
@@ -382,8 +382,9 @@ ifacedef	: QSTRING ifacesub
 					return -1;
 				}
 				/* ... but allow them for CN and MN */
-				free($1);
 			}
+			free($1);
+
 			nni = malloc(sizeof(struct net_iface));
 			if (nni == NULL) {
 				uerror("out of memory");
