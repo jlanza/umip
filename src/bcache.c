@@ -184,10 +184,9 @@ void bcache_free(struct bcentry *bce)
 }
 
 /**
- * bul_get - returns a binding update list entry
- * @hinfo: home address info, optional if our_addr is present
- * @our_addr: local address (home address)
- * @peer_addr: address of CN
+ * bcache_get - returns a binding cache entry
+ * @our_addr: our IPv6 address
+ * @peer_addr: peer's IPv6 address
  *
  * Returns reference to non-null entry on success and null on failure.
  * If caller adjusts lifetime of entry, caller must call

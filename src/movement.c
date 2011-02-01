@@ -1508,7 +1508,7 @@ static void md_update_router_stats(struct md_router *rtr)
 	if ((iface = md_get_inet6_iface(&ifaces, rtr->ifindex)) == NULL)
 		MDBG2("Router we are inserting a route for is "
 		      "reachable via an unknown interface (%d)\n",
-		      ifi->ifi_index);
+		      rtr->ifindex);
 	else
 		iface_pref = iface->preference;
 
