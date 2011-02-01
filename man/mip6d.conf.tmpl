@@ -259,7 +259,7 @@ Sets a maximum interval (in seconds) for Mobile Prefix Advertisements.
 Default: 86400
 
 .TP
-.BR "HaAcceptMobRtr enabled | disabled"
+.BR "HaAcceptMobRtr " "enabled | disabled" ";"
 
 Indicates if the HA accepts Mobile Router bindings.
 
@@ -274,7 +274,7 @@ bindings and is only needed if the MRs derive their Home Addresses from their
 Mobile Network Prefixes, instead of one of the home link prefixes.
 
 .TP
-.BR "BindingAclPolicy " "address MNP list " "allow | deny"
+.BR "BindingAclPolicy " "address " "MNP-list " "allow | deny" ";"
 
 Defines if a MN is allowed to register with the HA or not. The home address
 of the MN is given in the address field.  The mobile network prefixes
@@ -284,7 +284,7 @@ enclosed in braces, for example:
 .B "(3ffe:2620:6:3::/64, 3ffe:2620:6:4::/64)"
 
 .TP
-.BR "DefaultBindingAclPolicy allow | deny"
+.BR "DefaultBindingAclPolicy " "allow | deny" ";"
 
 Defines the default policy if no matching BindingAclPolicy entry is found for
 a MN.
@@ -337,7 +337,7 @@ Corresponent Nodes.
 Default: enabled
 
 .TP
-.BR "MnUseAllInterfaces enabled | disabled"
+.BR "MnUseAllInterfaces " "enabled | disabled" ";"
 
 Indicates if all interfaces should be used for mobility.  The preference
 of these interfaces is always 1.  Unless you use dynamically created and
@@ -348,7 +348,7 @@ options to explicitly list the used interfaces.
 Default: disabled
 
 .TP
-.BR "MobRtrUseExplicitMode enabled | disabled"
+.BR "MobRtrUseExplicitMode " "enabled | disabled" ";"
 
 Toggles between explicit or implicit mode home registrations in the MR.
 
@@ -388,7 +388,7 @@ before proceeding with the handoff.
 Default: 0
 
 .TP
-.BR "OptimisticHandoff  enabled | disabled"
+.BR "OptimisticHandoff " "enabled | disabled" ";"
 
 When a Mobile Node sends a Binding Update to the Home Agent, no Route
 Optimized or reverse tunneled traffic is sent until a Binding
@@ -438,7 +438,7 @@ if it is the unspecified address ::.
 Default: ::
 
 .TP
-.BR "IsMobRtr enabled | disabled"
+.BR "IsMobRtr " "enabled | disabled" ";"
 
 Defines if the MN is a NEMO MR.
 
