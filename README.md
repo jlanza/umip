@@ -1,12 +1,12 @@
 # UMIP MIPv6 implementation for Linux
 
-This is a copy of the [original repository][git://git.umip.org/umip.git] which has been down for a while and don't know if it is going up again.
+This is a copy of the [UMIP.org original repository] which has been down for a while and don't know if it is going up again.
 
 All credits for this code goes to the people at Helsinki University of Technology who originally developed the code. Please find below a copy of their readme. Some of the link are down or not maintained. I hpoe uploading this code will make people enchance the project.
 
 As the code was released under GPL licence, I guess there's no problem sharing it, bearing in mind the licence.
 
-In [my blog][http://devjlanza.wordpress.com/] there are some hints on how to compile it both in Linux (Ubuntu) and Android. Feel free to comment, but note it's been a while since I last worked with it ;)
+In [my blog] there are some hints on how to compile and use MIPv6 both in [Linux (Ubuntu)][1] and [Android][2]. Feel free to comment, but note it's been a while since I last worked with it ;)
 
 # Original REAME
 
@@ -44,9 +44,13 @@ In [my blog][http://devjlanza.wordpress.com/] there are some hints on how to com
   etc.) can subscribe to read-only mailing list called mipl-news.
 
   All mailing lists can be subscribed by sending "subscribe" as
-  subject to [listname]-request@mobile-ipv6.org (where [listname] is
+  subject to \[listname\]-request@mobile-ipv6.org (where \[listname\] is
   mipl, mipl-devel or mipl-news) or with the web interface at
   http://www.mobile-ipv6.org/cgi-bin/mailman/listinfo.  List archives
   are also available at the same location.
 
 
+[my blog]: http://devjlanza.wordpress.com/ "jlanza's Notebook"
+[UMIP.org original repository]: git://git.umip.org/umip.git "UMIP.org original repostiory"
+[1]: http://devjlanza.wordpress.com/2011/09/11/mobile-ipv6-user-space-daemons-in-linux-ubuntu/ "Mobile IPv6 user space daemons in Linux (Ubuntu)"
+[2]: http://devjlanza.wordpress.com/2011/09/12/mobile-ipv6-user-space-daemons-for-android/ "Mobile IPv6 user space daemons for Android"
